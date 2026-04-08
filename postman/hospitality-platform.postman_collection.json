@@ -1,0 +1,310 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-hosp-0001-gateway",
+    "name": "Hospitality Platform — Gateway API",
+    "description": "Calls the **gateway** only (inventory + reservations).\n\n**Setup:** import the example environment, set `baseUrl` and `access_token` (Auth0 access token with your API `aud` and claim `https://hospitality.app/claims/chain_id`), then set `hotel_id` + `room_type_id` for your tenant.\n\n**Conventions:** folders group by domain; auth is inherited (Bearer on protected folders). Health uses `noauth`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://hospitality-gateway.example.workers.dev"
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "hotel_id",
+      "value": ""
+    },
+    {
+      "key": "room_type_id",
+      "value": ""
+    },
+    {
+      "key": "reservation_id",
+      "value": ""
+    },
+    {
+      "key": "check_in",
+      "value": "2026-06-01"
+    },
+    {
+      "key": "check_out",
+      "value": "2026-06-04"
+    },
+    {
+      "key": "idempotency_key",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "00 — Public",
+      "item": [
+        {
+          "name": "GET Health",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health",
+            "description": "No `Authorization` header. Confirms gateway is reachable."
+          },
+          "response": []
+        }
+      ],
+      "description": "Unauthenticated smoke checks."
+    },
+    {
+      "name": "01 — Inventory",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{access_token}}",
+            "type": "string"
+          }
+        ]
+      },
+      "item": [
+        {
+          "name": "GET List hotels",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const j = pm.response.json();",
+                  "    if (j.hotels && j.hotels[0] && j.hotels[0].id) {",
+                  "        const id = j.hotels[0].id;",
+                  "        pm.collectionVariables.set('hotel_id', id);",
+                  "        if (pm.environment.name) {",
+                  "            pm.environment.set('hotel_id', id);",
+                  "        }",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/inventory/hotels",
+            "description": "Returns `hotels[]` for the JWT `chain_id`. On **200**, saves first hotel `id` to `hotel_id` (environment + collection) when present."
+          },
+          "response": []
+        },
+        {
+          "name": "GET Hotel by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/inventory/hotels/{{hotel_id}}",
+            "description": "Single hotel for the token’s chain. **404** if id not in chain."
+          },
+          "response": []
+        },
+        {
+          "name": "GET Room types for hotel",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const j = pm.response.json();",
+                  "    if (j.room_types && j.room_types[0] && j.room_types[0].id) {",
+                  "        const id = j.room_types[0].id;",
+                  "        pm.collectionVariables.set('room_type_id', id);",
+                  "        if (pm.environment.name) {",
+                  "            pm.environment.set('room_type_id', id);",
+                  "        }",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/inventory/hotels/{{hotel_id}}/room-types",
+            "description": "`room_types[]` for this hotel. On **200**, saves first type `id` to `room_type_id`. Run after **GET List hotels** (or set `hotel_id` manually)."
+          },
+          "response": []
+        }
+      ],
+      "description": "Bearer token required; gateway injects `x-chain-id`."
+    },
+    {
+      "name": "02 — Reservations",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{access_token}}",
+            "type": "string"
+          }
+        ]
+      },
+      "item": [
+        {
+          "name": "GET List reservations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/reservations?limit=20&offset=0",
+            "description": "Newest first for the JWT `chain_id`. Response includes `has_more` for simple pagination. No embedded `guest` rows."
+          },
+          "response": []
+        },
+        {
+          "name": "POST Create reservation",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "function __t(v) {",
+                  "    if (v === undefined || v === null) return '';",
+                  "    return String(v).trim();",
+                  "}",
+                  "var k = __t(pm.environment.get('idempotency_key')) || __t(pm.collectionVariables.get('idempotency_key'));",
+                  "if (!k) {",
+                  "    k = pm.variables.replaceIn('{{$guid}}');",
+                  "    if (pm.environment.name) {",
+                  "        pm.environment.set('idempotency_key', k);",
+                  "    }",
+                  "    pm.collectionVariables.set('idempotency_key', k);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const c = pm.response.code;",
+                  "if (c === 200 || c === 201) {",
+                  "    const j = pm.response.json();",
+                  "    if (j && j.reservation && j.reservation.id) {",
+                  "        const id = j.reservation.id;",
+                  "        pm.collectionVariables.set('reservation_id', id);",
+                  "        if (pm.environment.name) {",
+                  "            pm.environment.set('reservation_id', id);",
+                  "        }",
+                  "    }",
+                  "}",
+                  "pm.test('Status is 200 or 201', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotency_key}}",
+                "description": "Pinned in collection var on first run (pre-request). Clear `idempotency_key` to force a new key, or set manually for replay tests."
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hotel_id\": \"{{hotel_id}}\",\n  \"room_type_id\": \"{{room_type_id}}\",\n  \"check_in\": \"{{check_in}}\",\n  \"check_out\": \"{{check_out}}\",\n  \"guest\": {\n    \"first_name\": \"Ada\",\n    \"last_name\": \"Lovelace\",\n    \"email\": \"ada@example.com\",\n    \"phone\": \"+1-555-0100\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/v1/reservations",
+            "description": "First send sets `reservation_id` on the **active environment** (if any) and collection. For a **new** booking, clear **`idempotency_key`** in the **environment** (or collection); pre-request fills a new GUID. Re-send **without** clearing to test replay (**200** + `idempotent_replay: true`). After **`0011`**, **400** if overlapping **pending**/**confirmed** bookings meet **`room_type.units_total`** for **[check_in, check_out)**."
+          },
+          "response": []
+        },
+        {
+          "name": "GET Reservation by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/reservations/{{reservation_id}}",
+            "description": "Uses `{{reservation_id}}` from the **environment** (if set) or collection, saved by **POST Create reservation**. Set manually if needed."
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH Guest contact",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"ada.updated@example.com\",\n  \"phone\": \"+1-555-0199\"\n}"
+            },
+            "url": "{{baseUrl}}/v1/reservations/{{reservation_id}}/guest",
+            "description": "At least one of `first_name`, `last_name`, `email`, `phone`. Set `\"phone\": null` to clear phone."
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH Confirm reservation",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"confirmed\"\n}"
+            },
+            "url": "{{baseUrl}}/v1/reservations/{{reservation_id}}",
+            "description": "`pending` → `confirmed`. Duplicate **PATCH** with same status is a no-op (**200**). After confirm, only `{\"status\":\"cancelled\"}` is valid."
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH Cancel reservation",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"cancelled\"\n}"
+            },
+            "url": "{{baseUrl}}/v1/reservations/{{reservation_id}}",
+            "description": "Valid from **pending** or **confirmed**. From **cancelled**, further changes return **409**."
+          },
+          "response": []
+        }
+      ],
+      "description": "Bearer + `Idempotency-Key` on creates. **PATCH** updates `status` (lifecycle). Dates are **YYYY-MM-DD**; `check_out` must be after `check_in`."
+    }
+  ]
+}

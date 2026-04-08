@@ -1,0 +1,25 @@
+{
+  "name": "hospitality-platform",
+  "private": true,
+  "description": "Microservices on Cloudflare Workers + Supabase + Auth0",
+  "workspaces": [
+    "services/gateway",
+    "services/inventory",
+    "services/reservations"
+  ],
+  "scripts": {
+    "dev:gateway": "npm run dev -w hospitality-gateway",
+    "dev:inventory": "npm run dev -w hospitality-inventory",
+    "dev:reservations": "npm run dev -w hospitality-reservations",
+    "deploy:inventory": "npm run deploy -w hospitality-inventory",
+    "deploy:reservations": "npm run deploy -w hospitality-reservations",
+    "deploy:gateway": "npm run deploy -w hospitality-gateway",
+    "deploy:all": "npm run deploy:inventory && npm run deploy:reservations && npm run deploy:gateway"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "wrangler": "^4.81.0"
+  }
+}

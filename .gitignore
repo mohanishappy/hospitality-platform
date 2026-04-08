@@ -1,0 +1,12 @@
+node_modules/
+.wrangler/
+.dev.vars
+.env
+.env.*
+!.env.example
+dist/
+*.log
+.DS_Store
+
+# Local Postman env (secrets) — keep `*.example.postman_environment.json` in git only
+postman/*.local.postman_environment.json

@@ -1,0 +1,12 @@
+name = "hospitality-gateway"
+main = "src/index.ts"
+compatibility_date = "2024-12-30"
+
+# Deploy inventory + reservations first; Worker `name` must match.
+[[services]]
+binding = "INVENTORY"
+service = "hospitality-inventory"
+
+[[services]]
+binding = "RESERVATIONS"
+service = "hospitality-reservations"
