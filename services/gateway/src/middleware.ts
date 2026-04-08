@@ -8,7 +8,8 @@ export const requireAuthAndChain: MiddlewareHandler<{
   Bindings: GatewayEnv;
   Variables: GatewayVariables;
 }> = async (c, next) => {
-  if (c.req.path === "/health") return next();
+  const p = c.req.path;
+  if (p === "/health" || p === "/openapi.json" || p === "/docs") return next();
   const auth = c.req.header("Authorization");
   if (!auth?.startsWith("Bearer ")) {
     return problem(

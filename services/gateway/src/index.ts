@@ -1,5 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { DOCS_HTML } from "./docs-html";
+import openApiSpec from "./openapi.json";
 import { problem } from "./problem";
 import { requireAuthAndChain } from "./middleware";
 import type { GatewayEnv, GatewayVariables } from "./types";
@@ -13,6 +15,16 @@ app.get("/health", () =>
   new Response(JSON.stringify({ ok: true, service: "gateway" }), {
     headers: { "content-type": "application/json" },
   })
+);
+
+app.get("/openapi.json", (c) =>
+  c.json(openApiSpec as Record<string, unknown>, 200, {
+    "cache-control": "public, max-age=300",
+  })
+);
+
+app.get("/docs", (c) =>
+  c.html(DOCS_HTML, 200, { "cache-control": "public, max-age=300" })
 );
 
 app.use("*", requireAuthAndChain);

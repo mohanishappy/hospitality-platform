@@ -13,6 +13,8 @@ Microservices on **Cloudflare Workers** with **Supabase Postgres** and **Auth0**
 | `supabase/migrations` | SQL: through **`0011` — room_type units/pricing + booking availability** |
 | `postman/` | Postman **collection** + **example environment** for gateway requests ([`postman/README.md`](postman/README.md)) |
 
+**API spec (gateway, public):** `GET /openapi.json` (OpenAPI 3.0); `GET /docs` (Swagger UI — use **Authorize** with a Bearer token for protected operations). Contract source: `services/gateway/src/openapi.json`.
+
 ## Prerequisites
 
 - Node.js 20+

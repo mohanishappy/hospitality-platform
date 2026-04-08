@@ -1,0 +1,547 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Hospitality Platform API",
+    "description": "Gateway surface for **inventory** (hotels, room types) and **reservations**. Send requests to the gateway URL; it validates **Auth0** JWTs and forwards to backing Workers (injects `x-chain-id` from the token).\n\n**Token:** Bearer access token with `aud` = your API identifier and a tenant claim: claim key **`https://hospitality.app/claims/chain_id`** (string UUID), or **`chain_id`** — must match an `inventory.chain` row.\n\n**Errors:** JSON **`application/problem+json`** with `type`, `title`, `detail`, `status` (see schema **Problem**).",
+    "version": "1.0.0",
+    "contact": { "name": "Hospitality Platform" }
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Gateway origin (same scheme/host as this document)."
+    }
+  ],
+  "tags": [
+    { "name": "Meta", "description": "Health and documentation" },
+    { "name": "Inventory", "description": "Hotels and room types for the caller's chain" },
+    { "name": "Reservations", "description": "Bookings and guest updates" }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["Meta"],
+        "summary": "Gateway health",
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "description": "Service is reachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["ok", "service"],
+                  "properties": {
+                    "ok": { "type": "boolean", "example": true },
+                    "service": { "type": "string", "example": "gateway" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "tags": ["Meta"],
+        "summary": "OpenAPI document",
+        "operationId": "getOpenApi",
+        "responses": {
+          "200": {
+            "description": "OpenAPI 3.0 JSON",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/inventory/hotels": {
+      "get": {
+        "tags": ["Inventory"],
+        "summary": "List hotels",
+        "operationId": "listHotels",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Hotels for the JWT chain",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["hotels"],
+                  "properties": {
+                    "hotels": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/HotelSummary" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/v1/inventory/hotels/{id}": {
+      "get": {
+        "tags": ["Inventory"],
+        "summary": "Get hotel by id",
+        "operationId": "getHotelById",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Hotel detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["hotel"],
+                  "properties": {
+                    "hotel": { "$ref": "#/components/schemas/HotelDetail" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "500": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/v1/inventory/hotels/{hotelId}/room-types": {
+      "get": {
+        "tags": ["Inventory"],
+        "summary": "List room types for a hotel",
+        "operationId": "listRoomTypes",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "hotelId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Room types (code-ordered)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["hotel_id", "room_types"],
+                  "properties": {
+                    "hotel_id": { "type": "string", "format": "uuid" },
+                    "room_types": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/RoomType" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "500": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/v1/reservations": {
+      "get": {
+        "tags": ["Reservations"],
+        "summary": "List reservations",
+        "operationId": "listReservations",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 0, "default": 0 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Newest first; list rows omit nested guest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["reservations", "limit", "offset", "has_more"],
+                  "properties": {
+                    "reservations": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/ReservationListItem" }
+                    },
+                    "limit": { "type": "integer" },
+                    "offset": { "type": "integer" },
+                    "has_more": { "type": "boolean" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/Problem" }
+        }
+      },
+      "post": {
+        "tags": ["Reservations"],
+        "summary": "Create reservation (idempotent)",
+        "description": "Requires **`Idempotency-Key`** (UUID recommended). First request **201** + `idempotent_replay: false`; same key replays **200** + `idempotent_replay: true`. Dates **YYYY-MM-DD**; stay is **[check_in, check_out)** for overlap rules vs `room_type.units_total`.",
+        "operationId": "createReservation",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Stable key per logical create; replays return the same reservation."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateReservationRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Idempotent replay",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CreateReservationResponse" }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CreateReservationResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Problem" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/v1/reservations/{id}": {
+      "get": {
+        "tags": ["Reservations"],
+        "summary": "Get reservation by id",
+        "operationId": "getReservationById",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Includes nested **guest**",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["reservation"],
+                  "properties": {
+                    "reservation": { "$ref": "#/components/schemas/ReservationDetail" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "500": { "$ref": "#/components/responses/Problem" }
+        }
+      },
+      "patch": {
+        "tags": ["Reservations"],
+        "summary": "Update reservation status",
+        "description": "Lifecycle: **pending** → **confirmed** | **cancelled**; **confirmed** → **cancelled**. Same status is a no-op.**409** if transition invalid.",
+        "operationId": "patchReservationStatus",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ReservationStatusPatch" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated or no-op",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["reservation"],
+                  "properties": {
+                    "reservation": { "$ref": "#/components/schemas/ReservationDetail" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "409": { "$ref": "#/components/responses/Problem" },
+          "500": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/v1/reservations/{id}/guest": {
+      "patch": {
+        "tags": ["Reservations"],
+        "summary": "Patch guest contact fields",
+        "description": "At least one of **first_name**, **last_name**, **email**, **phone**. Use **`null`** for **phone** to clear.",
+        "operationId": "patchGuest",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Reservation id",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/GuestPatch" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Guest and reservation timestamps updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["reservation"],
+                  "properties": {
+                    "reservation": { "$ref": "#/components/schemas/ReservationDetail" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Problem" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "500": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Auth0 access token with required `aud` and `https://hospitality.app/claims/chain_id` (or `chain_id`)."
+      }
+    },
+    "schemas": {
+      "Problem": {
+        "type": "object",
+        "required": ["type", "title", "detail", "status"],
+        "properties": {
+          "type": { "type": "string", "example": "about:blank#missing-token" },
+          "title": { "type": "string" },
+          "detail": { "type": "string" },
+          "status": { "type": "integer", "example": 401 }
+        }
+      },
+      "HotelSummary": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "code": { "type": "string" },
+          "chain_id": { "type": "string", "format": "uuid" }
+        }
+      },
+      "HotelDetail": {
+        "allOf": [
+          { "$ref": "#/components/schemas/HotelSummary" },
+          {
+            "type": "object",
+            "properties": {
+              "created_at": { "type": "string", "format": "date-time" }
+            }
+          }
+        ]
+      },
+      "RoomType": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "hotel_id": { "type": "string", "format": "uuid" },
+          "chain_id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "code": { "type": "string" },
+          "capacity": { "type": "integer" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "units_total": { "type": "integer" },
+          "base_rate_cents": { "type": "integer", "nullable": true },
+          "currency": { "type": "string", "nullable": true }
+        }
+      },
+      "ReservationListItem": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "chain_id": { "type": "string", "format": "uuid" },
+          "hotel_id": { "type": "string", "format": "uuid" },
+          "room_type_id": { "type": "string", "format": "uuid" },
+          "check_in": { "type": "string", "format": "date" },
+          "check_out": { "type": "string", "format": "date" },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "confirmed", "cancelled"]
+          },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Guest": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "first_name": { "type": "string" },
+          "last_name": { "type": "string" },
+          "email": { "type": "string" },
+          "phone": { "type": "string", "nullable": true },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ReservationDetail": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ReservationListItem" },
+          {
+            "type": "object",
+            "properties": {
+              "guest": {
+                "nullable": true,
+                "allOf": [{ "$ref": "#/components/schemas/Guest" }]
+              }
+            }
+          }
+        ]
+      },
+      "CreateReservationRequest": {
+        "type": "object",
+        "required": ["hotel_id", "room_type_id", "check_in", "check_out", "guest"],
+        "properties": {
+          "hotel_id": { "type": "string", "format": "uuid" },
+          "room_type_id": { "type": "string", "format": "uuid" },
+          "check_in": { "type": "string", "format": "date", "example": "2026-06-01" },
+          "check_out": { "type": "string", "format": "date", "example": "2026-06-04" },
+          "guest": {
+            "type": "object",
+            "required": ["first_name", "last_name", "email"],
+            "properties": {
+              "first_name": { "type": "string" },
+              "last_name": { "type": "string" },
+              "email": { "type": "string" },
+              "phone": { "type": "string", "nullable": true }
+            }
+          }
+        }
+      },
+      "CreateReservationResponse": {
+        "type": "object",
+        "required": ["reservation", "idempotency_key", "idempotent_replay"],
+        "properties": {
+          "reservation": { "$ref": "#/components/schemas/ReservationDetail" },
+          "idempotency_key": { "type": "string" },
+          "idempotent_replay": { "type": "boolean" }
+        }
+      },
+      "ReservationStatusPatch": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["pending", "confirmed", "cancelled"]
+          }
+        }
+      },
+      "GuestPatch": {
+        "type": "object",
+        "minProperties": 1,
+        "properties": {
+          "first_name": { "type": "string" },
+          "last_name": { "type": "string" },
+          "email": { "type": "string" },
+          "phone": { "type": "string", "nullable": true }
+        },
+        "description": "Include at least one property."
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Missing or invalid Bearer token, or missing chain claim",
+        "content": {
+          "application/problem+json": {
+            "schema": { "$ref": "#/components/schemas/Problem" }
+          }
+        }
+      },
+      "Problem": {
+        "description": "Error (validation, not found, conflict, server)",
+        "content": {
+          "application/problem+json": {
+            "schema": { "$ref": "#/components/schemas/Problem" }
+          }
+        }
+      }
+    }
+  }
+}
