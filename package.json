@@ -8,6 +8,12 @@
     "services/reservations"
   ],
   "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "npm run typecheck:inventory && npm run typecheck:reservations && npm run typecheck:gateway",
+    "typecheck:inventory": "cd services/inventory && npx tsc --noEmit",
+    "typecheck:reservations": "cd services/reservations && npx tsc --noEmit",
+    "typecheck:gateway": "cd services/gateway && npx tsc --noEmit",
     "dev:gateway": "npm run dev -w hospitality-gateway",
     "dev:inventory": "npm run dev -w hospitality-inventory",
     "dev:reservations": "npm run dev -w hospitality-reservations",
@@ -20,6 +26,8 @@
     "node": ">=20"
   },
   "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.9",
     "wrangler": "^4.81.0"
   }
 }

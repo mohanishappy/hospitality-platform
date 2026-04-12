@@ -4,6 +4,11 @@ import { inventoryApp } from "./inventory-app";
 import { requireChainForInventory } from "./middleware";
 
 const app = new Hono<{ Bindings: Env }>();
+app.use("*", async (c, next) => {
+  await next();
+  const rid = c.req.header("x-request-id")?.trim();
+  if (rid) c.header("x-request-id", rid);
+});
 app.use("*", requireChainForInventory);
 app.get("/health", (c) => c.json({ ok: true, service: "inventory" }));
 app.route("/v1/inventory", inventoryApp());

@@ -8,6 +8,8 @@ export type CreateReservationBody = {
   room_type_id: string;
   check_in: string;
   check_out: string;
+  /** If set, create fails with **409** when it does not match the server-computed quote total (minor units). */
+  expected_total_cents?: number | null;
   guest: {
     first_name: string;
     last_name: string;

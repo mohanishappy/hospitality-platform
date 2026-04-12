@@ -8,6 +8,7 @@ export type GatewayEnv = {
 };
 
 export type GatewayVariables = {
-  jwt: JWTPayload;
-  chainId: string;
+  requestId: string;
+  jwt?: JWTPayload;
+  chainId?: string;
 };

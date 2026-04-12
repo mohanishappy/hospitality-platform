@@ -8,7 +8,10 @@ export async function forward(
   const url = new URL(c.req.url);
   const target = new URL(url.pathname + url.search, "https://internal");
   const headers = new Headers(c.req.raw.headers);
-  headers.set("x-chain-id", c.get("chainId"));
+  const chainId = c.get("chainId");
+  if (chainId) headers.set("x-chain-id", chainId);
+  const requestId = c.get("requestId");
+  if (requestId) headers.set("x-request-id", requestId);
   const method = c.req.raw.method;
   const init: RequestInit = {
     method,

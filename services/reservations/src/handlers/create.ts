@@ -34,7 +34,7 @@ export async function createReservation(c: Context<{ Bindings: Env }>) {
     return problem(500, "Misconfigured", "Supabase env missing");
   }
   const supa = supaClient(c.env);
-  const { data, error } = await supa.rpc("create_reservation_idempotent", {
+  const rpcArgs: Record<string, unknown> = {
     p_chain_id: chainId,
     p_idempotency_key: idem.trim(),
     p_hotel_id: b.hotel_id,
@@ -45,13 +45,30 @@ export async function createReservation(c: Context<{ Bindings: Env }>) {
     p_guest_last_name: b.guest.last_name,
     p_guest_email: b.guest.email,
     p_guest_phone: b.guest.phone ?? null,
-  });
+  };
+  if (b.expected_total_cents != null) {
+    rpcArgs.p_expected_total_cents = b.expected_total_cents;
+  }
+  const { data, error } = await supa.rpc(
+    "create_reservation_idempotent",
+    rpcArgs
+  );
   if (error) {
     if (error.code === "23503") {
       return problem(
         400,
         "Bad Request",
         "Invalid foreign key (chain, hotel, or room_type)"
+      );
+    }
+    if (
+      typeof error.message === "string" &&
+      error.message.includes("PRICE_MISMATCH")
+    ) {
+      return problem(
+        409,
+        "Conflict",
+        "expected_total_cents does not match the current quote for this stay"
       );
     }
     if (error.code === "22023") {

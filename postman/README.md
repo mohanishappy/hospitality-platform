@@ -17,6 +17,8 @@ If you have an **older** `*.local.postman_environment.json` with empty `hotel_id
 
 Select the environment in Postman’s top-right dropdown so `{{baseUrl}}` and `{{access_token}}` resolve correctly.
 
+Optional: add a **`x-request-id`** header (any string) on a request; the gateway echoes it on the response and forwards it to Workers for log correlation.
+
 ---
 
 ## Local environment setup

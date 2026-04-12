@@ -10,8 +10,10 @@ Microservices on **Cloudflare Workers** with **Supabase Postgres** and **Auth0**
 | `services/gateway` | Validates Auth0 JWTs, forwards to workers via **service bindings** (same URL path) |
 | `services/inventory` | Hotels + **room types** (list/detail under gateway) |
 | `services/reservations` | **POST/PATCH/GET** reservations; list; **status** lifecycle; idempotent **201**/**200** on create |
-| `supabase/migrations` | SQL: through **`0012` — nightly availability, commercial fields, quote RPC** |
+| `supabase/config.toml` | Supabase CLI config (local dev / **`supabase db push`** to a linked project) |
+| `supabase/migrations` | SQL: through **`0013` — pricing snapshot, list-filter indexes, chain `default_currency`, create RPC parity** |
 | `postman/` | Postman **collection** + **example environment** for gateway requests ([`postman/README.md`](postman/README.md)) |
+| `docs/FR_STATUS.md` | Backlog **FR** status for phases 0–2 (what shipped vs planned) |
 
 **API spec (gateway, public):** `GET /openapi.json` (OpenAPI 3.0); `GET /docs` (Swagger UI — use **Authorize** with a Bearer token for protected operations). Contract source: `services/gateway/src/openapi.json`.
 
@@ -25,12 +27,34 @@ Microservices on **Cloudflare Workers** with **Supabase Postgres** and **Auth0**
 ## 1) Supabase
 
 1. Create a project.
-2. Run migrations in order in the SQL editor (or `supabase db push`): [`0001_init.sql`](supabase/migrations/0001_init.sql) through [`0012_nightly_availability_and_commercial.sql`](supabase/migrations/0012_nightly_availability_and_commercial.sql) — see earlier numbered files for inventory/reservations/RPC history.
+2. Run migrations in order in the SQL editor (or `supabase db push`): [`0001_init.sql`](supabase/migrations/0001_init.sql) through [`0013_pricing_snapshot_list_filters_chain_currency.sql`](supabase/migrations/0013_pricing_snapshot_list_filters_chain_currency.sql) — see earlier numbered files for inventory/reservations/RPC history.
 3. **Turn on the Data API** (REST / PostgREST): Dashboard → **Project Settings** → **Data API** — use **Enable** if the API is off. Your Workers call this layer; it must be on.
 4. **Expose API schemas** (required for `supabase-js` `.schema(...)`): same **Data API** page (or **Project Settings → API** on older dashboards) → **Exposed schemas**. Include at least `public`, `inventory`, and `reservations` (comma-separated; keep existing entries like `public`). Save. Without this, hotels returns `Invalid schema: inventory`.  
    *Some UIs only show “Exposed schemas” after the Data API is enabled.*
 5. If hotels still returns **500** after migrations + steps 3–4, confirm **`0003_service_role_grants.sql`** ran successfully, then wait a short time and retry (there is no universal “reload schema cache” control on every dashboard).
 6. Copy **Project URL** and **service_role** key (Workers use server-side secrets only — never expose service_role in the browser).
+
+### Database migrations (CLI or GitHub Actions)
+
+The repo includes [`supabase/config.toml`](supabase/config.toml) so you can use the [Supabase CLI](https://supabase.com/docs/guides/cli) against a **remote** project (same migration files as manual SQL editor runs):
+
+```bash
+npx supabase login
+npx supabase link --project-ref <PROJECT_REF>
+npx supabase db push
+```
+
+(`<PROJECT_REF>` is the id in the dashboard URL: `https://supabase.com/dashboard/project/<PROJECT_REF>`.)
+
+**Automated apply on `main`:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs **`supabase link`** + **`supabase db push`** after tests pass and **before** Worker deploy (same push or **Run workflow** on `main`). Add these **repository secrets** so that job can run:
+
+| Secret | Purpose |
+|--------|---------|
+| **`SUPABASE_ACCESS_TOKEN`** | [Account access token](https://supabase.com/dashboard/account/tokens) (CLI non-interactive auth). |
+| **`SUPABASE_PROJECT_REF`** | Project **Reference ID** (Settings → General, or the dashboard URL). |
+| **`SUPABASE_DB_PASSWORD`** | Database password (Settings → Database). |
+
+**Manual only:** [`.github/workflows/migrate-db.yml`](.github/workflows/migrate-db.yml) runs the same steps via **Actions → Migrate database (Supabase) → Run workflow** when you need to apply migrations without a full CI run (e.g. hotfix schema before code, or a staging project with different secrets in a forked workflow).
 
 ## 2) Auth0
 
@@ -76,22 +100,25 @@ npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 
 ### Automated deploy (GitHub Actions)
 
-On every push to **`main`**, [`.github/workflows/deploy-workers.yml`](.github/workflows/deploy-workers.yml) runs **`npm ci`**, typechecks all three Workers, then deploys **inventory → reservations → gateway** (same order as `npm run deploy:all`).
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on **every push and pull request**: **`npm ci`**, **`npm test`**, then **typechecks** all three Workers. On **`main`** only (push or **Run workflow**), it applies **Supabase migrations** (`supabase db push`), then deploys **inventory → reservations → gateway** (same order as `npm run deploy:all`).
 
 **Repository secrets** (GitHub → **Settings** → **Secrets and variables** → **Actions**):
 
 | Secret | Value |
 |--------|--------|
+| **`SUPABASE_ACCESS_TOKEN`**, **`SUPABASE_PROJECT_REF`**, **`SUPABASE_DB_PASSWORD`** | Required for the **migrate** job on `main` (see [Database migrations](#database-migrations-cli-or-github-actions) above). |
 | **`CLOUDFLARE_API_TOKEN`** | API token with **Workers Scripts: Edit** (and **Account: Read** if prompted). Create under [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens) (e.g. “Edit Cloudflare Workers” template, scoped to the right account). |
 | **`CLOUDFLARE_ACCOUNT_ID`** | Cloudflare account ID (Workers dashboard URL or **Account Home** → right sidebar). |
 
-**Not stored in GitHub:** Worker runtime secrets (`SUPABASE_*`, `AUTH0_*`). Set those once per Worker with `wrangler secret put` (or the dashboard); CI only publishes new **code** bundles.
+**Not stored in GitHub:** Worker runtime secrets (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `AUTH0_*`). Set those once per Worker with `wrangler secret put` (or the dashboard); CI only publishes new **code** bundles and runs **remote** DB migrations against the linked Supabase project.
 
 You can re-run a deploy from the **Actions** tab (**Run workflow**) without pushing.
 
 ## Postman
 
-Import **`postman/hospitality-platform.postman_collection.json`**, create a **local** env (copy the example to `postman/hospitality-platform.local.postman_environment.json` — gitignored — see [**Local environment setup**](postman/README.md#local-environment-setup)), then set `baseUrl`, `access_token`, `hotel_id`, and `room_type_id`. Full guide: [`postman/README.md`](postman/README.md).
+Import **`postman/hospitality-platform.postman_collection.json`**, create a **local** env (copy the example to `postman/hospitality-platform.local.postman_environment.json` — gitignored — see [**Local environment setup**](postman/README.md#local-environment-setup)), then set **`baseUrl`** and **`access_token`** in the **environment** (they override empty collection values). **`hotel_id`**, **`room_type_id`**, **`reservation_id`**, and **`idempotency_key`** live on the **collection** by default (or in the env only when set to real values — never `""`). Full guide: [`postman/README.md`](postman/README.md).
+
+Responses include **`x-request-id`** for correlation; send the same header to trace a request end-to-end.
 
 ## Smoke test (gateway URL)
 
@@ -101,6 +128,7 @@ Replace `HOTEL_ID` and `ROOM_TYPE_ID` with UUIDs for your chain (from **Table Ed
 
 ```bash
 curl -sS "$GATEWAY_URL/health"
+curl -sS "$GATEWAY_URL/health/ready"
 curl -sS -H "Authorization: Bearer $ACCESS_TOKEN" "$GATEWAY_URL/v1/inventory/hotels"
 curl -sS -X POST "$GATEWAY_URL/v1/reservations" \
   -H "Authorization: Bearer $ACCESS_TOKEN" \

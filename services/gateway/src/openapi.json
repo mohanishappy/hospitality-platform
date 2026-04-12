@@ -42,6 +42,52 @@
         }
       }
     },
+    "/health/ready": {
+      "get": {
+        "tags": ["Meta"],
+        "summary": "Gateway readiness (Auth0 JWKS)",
+        "description": "Public. Verifies **`AUTH0_DOMAIN`** / **`AUTH0_AUDIENCE`** are set and **`GET …/jwks.json`** succeeds within a short timeout. Does not call Supabase.",
+        "operationId": "getHealthReady",
+        "responses": {
+          "200": {
+            "description": "JWKS reachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["ok", "service", "checks"],
+                  "properties": {
+                    "ok": { "type": "boolean", "example": true },
+                    "service": { "type": "string", "example": "gateway" },
+                    "checks": {
+                      "type": "object",
+                      "properties": {
+                        "jwks": { "type": "boolean" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Misconfiguration or JWKS fetch failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "service": { "type": "string" },
+                    "checks": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/openapi.json": {
       "get": {
         "tags": ["Meta"],
@@ -234,6 +280,33 @@
             "name": "offset",
             "in": "query",
             "schema": { "type": "integer", "minimum": 0, "default": 0 }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["pending", "confirmed", "cancelled"]
+            },
+            "description": "Filter by reservation status."
+          },
+          {
+            "name": "hotel_id",
+            "in": "query",
+            "schema": { "type": "string", "format": "uuid" },
+            "description": "Filter by hotel."
+          },
+          {
+            "name": "stay_from",
+            "in": "query",
+            "schema": { "type": "string", "format": "date" },
+            "description": "Start of stay overlap window (YYYY-MM-DD). Use with **`stay_to`**."
+          },
+          {
+            "name": "stay_to",
+            "in": "query",
+            "schema": { "type": "string", "format": "date" },
+            "description": "End of overlap window (YYYY-MM-DD), exclusive. Reservations overlapping **[stay_from, stay_to)** are returned."
           }
         ],
         "responses": {
@@ -257,6 +330,7 @@
               }
             }
           },
+          "400": { "$ref": "#/components/responses/Problem" },
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "500": { "$ref": "#/components/responses/Problem" }
         }
@@ -303,6 +377,14 @@
           },
           "400": { "$ref": "#/components/responses/Problem" },
           "401": { "$ref": "#/components/responses/Unauthorized" },
+          "409": {
+            "description": "Computed total does not match **`expected_total_cents`** (price changed since quote).",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Problem" }
+              }
+            }
+          },
           "500": { "$ref": "#/components/responses/Problem" }
         }
       }
@@ -521,6 +603,28 @@
           "total_cents": { "type": "integer" }
         }
       },
+      "FeeLineItem": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "string" },
+          "label": { "type": "string" },
+          "amount_cents": { "type": "integer" }
+        }
+      },
+      "PricingSnapshot": {
+        "type": "object",
+        "description": "Commercial snapshot persisted at booking time (FR-C4/C5).",
+        "properties": {
+          "currency": { "type": "string" },
+          "room_subtotal_cents": { "type": "integer" },
+          "tax_cents": { "type": "integer" },
+          "fee_line_items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/FeeLineItem" }
+          },
+          "total_cents": { "type": "integer" }
+        }
+      },
       "ReservationListItem": {
         "type": "object",
         "properties": {
@@ -535,7 +639,11 @@
             "enum": ["pending", "confirmed", "cancelled"]
           },
           "created_at": { "type": "string", "format": "date-time" },
-          "updated_at": { "type": "string", "format": "date-time" }
+          "updated_at": { "type": "string", "format": "date-time" },
+          "pricing_snapshot": {
+            "nullable": true,
+            "allOf": [{ "$ref": "#/components/schemas/PricingSnapshot" }]
+          }
         }
       },
       "Guest": {
@@ -572,6 +680,11 @@
           "room_type_id": { "type": "string", "format": "uuid" },
           "check_in": { "type": "string", "format": "date", "example": "2026-06-01" },
           "check_out": { "type": "string", "format": "date", "example": "2026-06-04" },
+          "expected_total_cents": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "If set, create fails with **409** when it does not match the computed total (quote parity)."
+          },
           "guest": {
             "type": "object",
             "required": ["first_name", "last_name", "email"],

@@ -9,7 +9,14 @@ export const requireAuthAndChain: MiddlewareHandler<{
   Variables: GatewayVariables;
 }> = async (c, next) => {
   const p = c.req.path;
-  if (p === "/health" || p === "/openapi.json" || p === "/docs") return next();
+  if (
+    p === "/health" ||
+    p === "/health/ready" ||
+    p === "/openapi.json" ||
+    p === "/docs"
+  ) {
+    return next();
+  }
   const auth = c.req.header("Authorization");
   if (!auth?.startsWith("Bearer ")) {
     return problem(

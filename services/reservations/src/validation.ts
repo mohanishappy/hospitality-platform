@@ -65,6 +65,20 @@ export function parseCreateBody(raw: unknown):
   if (phone !== undefined && phone !== null && typeof phone !== "string") {
     return { ok: false, detail: "guest.phone must be a string if present" };
   }
+  let expected_total_cents: number | null | undefined;
+  if ("expected_total_cents" in o) {
+    const e = o.expected_total_cents;
+    if (e === null || e === undefined) {
+      expected_total_cents = null;
+    } else if (typeof e === "number" && Number.isInteger(e) && e >= 0) {
+      expected_total_cents = e;
+    } else {
+      return {
+        ok: false,
+        detail: "expected_total_cents must be a non-negative integer or null",
+      };
+    }
+  }
   return {
     ok: true,
     body: {
@@ -72,6 +86,7 @@ export function parseCreateBody(raw: unknown):
       room_type_id: room_type_id.trim(),
       check_in,
       check_out,
+      expected_total_cents,
       guest: {
         first_name: first_name.trim(),
         last_name: last_name.trim(),
@@ -176,4 +191,82 @@ export function parseListQuery(c: {
   let offset = Number.parseInt(offsetRaw ?? "0", 10);
   if (!Number.isFinite(offset) || offset < 0) offset = 0;
   return { limit, offset };
+}
+
+const uuidLike =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** Query params for `GET /v1/reservations` list filters (FR-R8). */
+export function parseReservationListFilters(c: {
+  req: { query: (k: string) => string | undefined };
+}):
+  | {
+      ok: true;
+      status?: "pending" | "confirmed" | "cancelled";
+      hotel_id?: string;
+      stay_from?: string;
+      stay_to?: string;
+    }
+  | { ok: false; detail: string } {
+  const statusRaw = c.req.query("status")?.trim();
+  const hotelIdRaw = c.req.query("hotel_id")?.trim();
+  const stayFrom = c.req.query("stay_from")?.trim();
+  const stayTo = c.req.query("stay_to")?.trim();
+
+  let status: "pending" | "confirmed" | "cancelled" | undefined;
+  if (statusRaw) {
+    if (
+      statusRaw !== "pending" &&
+      statusRaw !== "confirmed" &&
+      statusRaw !== "cancelled"
+    ) {
+      return {
+        ok: false,
+        detail:
+          'status must be "pending", "confirmed", or "cancelled" when provided',
+      };
+    }
+    status = statusRaw;
+  }
+
+  let hotel_id: string | undefined;
+  if (hotelIdRaw) {
+    if (!uuidLike.test(hotelIdRaw)) {
+      return { ok: false, detail: "hotel_id must be a UUID when provided" };
+    }
+    hotel_id = hotelIdRaw;
+  }
+
+  const isoDateRe = /^\d{4}-\d{2}-\d{2}$/;
+  if (stayFrom || stayTo) {
+    if (!stayFrom || !stayTo) {
+      return {
+        ok: false,
+        detail: "stay_from and stay_to must both be provided for a date window filter",
+      };
+    }
+    if (!isoDateRe.test(stayFrom) || !isoDateRe.test(stayTo)) {
+      return {
+        ok: false,
+        detail: "stay_from and stay_to must be YYYY-MM-DD",
+      };
+    }
+    const t0 = Date.parse(`${stayFrom}T00:00:00.000Z`);
+    const t1 = Date.parse(`${stayTo}T00:00:00.000Z`);
+    if (Number.isNaN(t0) || Number.isNaN(t1) || t1 <= t0) {
+      return {
+        ok: false,
+        detail: "stay_to must be after stay_from for overlap filter",
+      };
+    }
+    return {
+      ok: true,
+      status,
+      hotel_id,
+      stay_from: stayFrom,
+      stay_to: stayTo,
+    };
+  }
+
+  return { ok: true, status, hotel_id };
 }
