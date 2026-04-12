@@ -11,9 +11,9 @@ Microservices on **Cloudflare Workers** with **Supabase Postgres** and **Auth0**
 | `services/inventory` | Hotels + **room types** (list/detail under gateway) |
 | `services/reservations` | **POST/PATCH/GET** reservations; list; **status** lifecycle; idempotent **201**/**200** on create |
 | `supabase/config.toml` | Supabase CLI config (local dev / **`supabase db push`** to a linked project) |
-| `supabase/migrations` | SQL: through **`0013` — pricing snapshot, list-filter indexes, chain `default_currency`, create RPC parity** |
+| `supabase/migrations` | SQL: through **`0014` — rate plans, LOS tiers, promotions, inventory blocks, booking policies, search + calendar RPCs** |
 | `postman/` | Postman **collection** + **example environment** for gateway requests ([`postman/README.md`](postman/README.md)) |
-| `docs/FR_STATUS.md` | Backlog **FR** status for phases 0–2 (what shipped vs planned) |
+| `docs/FR_STATUS.md` | Backlog **FR** status through phases **0–4** (what shipped vs planned) |
 
 **API spec (gateway, public):** `GET /openapi.json` (OpenAPI 3.0); `GET /docs` (Swagger UI — use **Authorize** with a Bearer token for protected operations). Contract source: `services/gateway/src/openapi.json`.
 
@@ -27,7 +27,7 @@ Microservices on **Cloudflare Workers** with **Supabase Postgres** and **Auth0**
 ## 1) Supabase
 
 1. Create a project.
-2. Run migrations in order in the SQL editor (or `supabase db push`): [`0001_init.sql`](supabase/migrations/0001_init.sql) through [`0013_pricing_snapshot_list_filters_chain_currency.sql`](supabase/migrations/0013_pricing_snapshot_list_filters_chain_currency.sql) — see earlier numbered files for inventory/reservations/RPC history.
+2. Run migrations in order in the SQL editor (or `supabase db push`): [`0001_init.sql`](supabase/migrations/0001_init.sql) through [`0014_phase3_phase4_rate_plans_search_policies.sql`](supabase/migrations/0014_phase3_phase4_rate_plans_search_policies.sql) — see earlier numbered files for inventory/reservations/RPC history.
 3. **Turn on the Data API** (REST / PostgREST): Dashboard → **Project Settings** → **Data API** — use **Enable** if the API is off. Your Workers call this layer; it must be on.
 4. **Expose API schemas** (required for `supabase-js` `.schema(...)`): same **Data API** page (or **Project Settings → API** on older dashboards) → **Exposed schemas**. Include at least `public`, `inventory`, and `reservations` (comma-separated; keep existing entries like `public`). Save. Without this, hotels returns `Invalid schema: inventory`.  
    *Some UIs only show “Exposed schemas” after the Data API is enabled.*

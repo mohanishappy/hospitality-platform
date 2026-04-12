@@ -18,6 +18,8 @@ describe("parseAvailabilityQuery", () => {
     if (r.ok) {
       expect(r.check_in).toBe("2026-06-01");
       expect(r.check_out).toBe("2026-06-04");
+      expect(r.rate_plan_code).toBeNull();
+      expect(r.promotion_code).toBeNull();
     }
   });
 

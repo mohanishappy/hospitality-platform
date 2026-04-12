@@ -1,9 +1,9 @@
 # Functional requirements — Hospitality Platform API
 
-This document captures **functional requirements** (FRs) for the gateway-backed API: inventory (hotels, room types, availability/quote) and reservations. **§1** reflects the **as-built** behavior as of Supabase migration **`0012`** and the gateway OpenAPI contract. **§2** is a **prioritized backlog** for future work.
+This document captures **functional requirements** (FRs) for the gateway-backed API: inventory (hotels, room types, availability/quote, search, calendar) and reservations. **§1** reflects the **as-built** behavior as of Supabase migration **`0014`** and the gateway OpenAPI contract. **§2** is a **prioritized backlog** (several items are now shipped — see [`FR_STATUS.md`](FR_STATUS.md)).
 
 **Contract source:** `services/gateway/src/openapi.json`  
-**Migrations:** `supabase/migrations/` (through `0012_nightly_availability_and_commercial.sql`)  
+**Migrations:** `supabase/migrations/` (through `0014_phase3_phase4_rate_plans_search_policies.sql`)  
 **Backlog implementation order:** see [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).
 
 ---
@@ -33,16 +33,23 @@ This document captures **functional requirements** (FRs) for the gateway-backed 
 
 | ID | Requirement |
 |----|-------------|
-| **FR-I5** | **Quote and nightly bookability** for one room type and stay: `GET /v1/inventory/hotels/{hotelId}/room-types/{roomTypeId}/availability?check_in=&check_out=` with dates **YYYY-MM-DD** and **`check_out`** strictly after **`check_in`**. |
-| **FR-I6** | Stays use half-open intervals **`[check_in, check_out)`**. Capacity is **per night**: overlapping **pending** and **confirmed** reservations on each night must not exceed **`units_total` + `overbooking_allowance`**. |
-| **FR-I7** | Response includes **bookable**, occupancy summary (e.g. tightest night), and **pricing** consistent with **`base_rate_cents` × nights**, **`tax_rate_bps`** on room subtotal, and **`fee_fixed_cents`** per stay (see OpenAPI schemas **AvailabilityQuote** and **StayPricingQuote**). |
+| **FR-I5** | **Quote and nightly bookability** for one room type and stay: `GET /v1/inventory/hotels/{hotelId}/room-types/{roomTypeId}/availability?check_in=&check_out=` with dates **YYYY-MM-DD** and **`check_out`** strictly after **`check_in`**. Optional query **`rate_plan_code`** and **`promotion_code`** align pricing with **`POST /v1/reservations`**. |
+| **FR-I6** | Stays use half-open intervals **`[check_in, check_out)`**. Capacity is **per night**: overlapping **pending** and **confirmed** reservations on each night must not exceed **`units_total` + `overbooking_allowance` − inventory blocks** (`inventory.inventory_block`). |
+| **FR-I7** | Response includes **bookable**, occupancy summary (e.g. tightest night), and **pricing**: **rate plans** (BAR fallback, optional **LOS** tier **`nightly_rate_cents`**), optional **promotions**, then **`tax_rate_bps`** on discounted room subtotal and **`fee_fixed_cents`** per stay (see OpenAPI **AvailabilityQuote** / **StayPricingQuote**). |
+
+### 1.3b Inventory — search and calendar (phase 4)
+
+| ID | Requirement |
+|----|-------------|
+| **FR-V1** | **Search** across room types / hotels: `GET /v1/inventory/search?check_in=&check_out=` with optional comma-separated **`hotel_ids`**, **`sort`** (`price` \| `bookable`), **`limit`** (1–100), and optional **`rate_plan_code`** / **`promotion_code`**. Rows omit hotels that fail **booking policy** validation for the stay. |
+| **FR-V2** | **Calendar** view: `GET /v1/inventory/hotels/{hotelId}/room-types/{roomTypeId}/calendar?from=&to=` with half-open **`[from, to)`** — per-day **occupancy**, **blocks**, **remaining_units**, **bookable**. |
 
 ### 1.4 Reservations — lifecycle and idempotency
 
 | ID | Requirement |
 |----|-------------|
 | **FR-R1** | **Create reservation** requires header **`Idempotency-Key`**. First successful create returns **201** with **`idempotent_replay: false`**; replay with the same key and equivalent body returns **200** with **`idempotent_replay: true`**. |
-| **FR-R2** | Create body includes **`hotel_id`**, **`room_type_id`**, **`check_in`**, **`check_out`** (date-only), and nested **`guest`** fields as validated by the service. |
+| **FR-R2** | Create body includes **`hotel_id`**, **`room_type_id`**, **`check_in`**, **`check_out`** (date-only), nested **`guest`**, and optional **`rate_plan_code`** / **`promotion_code`** (must match server pricing when set), as validated by the service. |
 | **FR-R3** | Create enforces the same **per-night** capacity rules as the availability quote path (aligned with migration **0012** RPCs). |
 | **FR-R4** | **List reservations** for the chain supports **`limit`** (default 20, max 100) and **`offset`** (default 0). List items omit embedded **guest**; use **GET by id** for guest PII. |
 | **FR-R5** | **Get reservation by id** returns the reservation and nested **guest** for that chain. |
@@ -61,7 +68,7 @@ This document captures **functional requirements** (FRs) for the gateway-backed 
 | ID | Requirement |
 |----|-------------|
 | **FR-S1** | Postman artifacts under `postman/` support gateway testing, including **GET Room type availability & quote** and reservation flows; environment vs collection variables follow `postman/README.md`. |
-| **FR-S2** | Supabase migrations through **0012** define schemas, RPCs, and grants; Workers use the **service role** and `supabase-js` with exposed schemas **`inventory`** and **`reservations`** (and **`public`** as needed). |
+| **FR-S2** | Supabase migrations through **0014** define schemas, RPCs, and grants; Workers use the **service role** and `supabase-js` with exposed schemas **`inventory`** and **`reservations`** (and **`public`** as needed). |
 
 ---
 
@@ -73,10 +80,10 @@ Prioritize into releases (e.g. commercial → search → operations).
 
 | ID | Requirement |
 |----|-------------|
-| **FR-C1** | **Rate plans** (e.g. BAR, packages): rules attached to **room type** or **hotel** with effective date windows. |
-| **FR-C2** | **Length-of-stay (LOS)** pricing (e.g. tiered nightly rates by stay length). |
-| **FR-C3** | **Promotions / coupons** (optional): percentage or fixed discounts with constraints (minimum LOS, blackout dates). |
-| **FR-C4** | **Itemized fees** beyond a single **`fee_fixed_cents`** (e.g. resort, parking). |
+| **FR-C1** | **Rate plans** (e.g. BAR, packages): rules attached to **room type** or **hotel** with effective date windows. *Shipped in DB + RPC (no admin REST CRUD).* |
+| **FR-C2** | **Length-of-stay (LOS)** pricing (e.g. tiered nightly rates by stay length). *Shipped: `rate_plan_los_tier`.* |
+| **FR-C3** | **Promotions / coupons** (optional): percentage or fixed discounts with constraints (minimum LOS, blackout dates). *Shipped: `promotion` table + optional code on quote/create/search.* |
+| **FR-C4** | **Itemized fees** beyond a single **`fee_fixed_cents`** (e.g. resort, parking). *Partial: JSON line items + fixed fee; full fee catalog TBD.* |
 | **FR-C5** | **Persist quoted amounts** on the reservation (or reference a quote snapshot) so confirmation matches what was displayed. |
 | **FR-C6** | **Currency** policy: consistent currency per hotel or chain and explicit **rounding** rules in API responses. |
 
@@ -84,10 +91,10 @@ Prioritize into releases (e.g. commercial → search → operations).
 
 | ID | Requirement |
 |----|-------------|
-| **FR-V1** | **Search** across multiple **room types** or **hotels** for a stay window (e.g. lowest price, filter by bookable). |
-| **FR-V2** | **Calendar-oriented** API: per-day availability or remaining units for planning UIs. |
-| **FR-V3** | **Inventory blocks** (maintenance, holds) that reduce sellable capacity without guest reservations. |
-| **FR-V4** | **Booking policies**: minimum/maximum LOS, closed-to-arrival/departure, same-day cutoff, **hotel timezone** awareness. |
+| **FR-V1** | **Search** across multiple **room types** or **hotels** for a stay window (e.g. lowest price, filter by bookable). *Shipped: **§1.3b**.* |
+| **FR-V2** | **Calendar-oriented** API: per-day availability or remaining units for planning UIs. *Shipped: **§1.3b**.* |
+| **FR-V3** | **Inventory blocks** (maintenance, holds) that reduce sellable capacity without guest reservations. *Shipped: `inventory_block`.* |
+| **FR-V4** | **Booking policies**: minimum/maximum LOS, closed-to-arrival/departure, same-day cutoff, **hotel timezone** awareness. *Shipped: hotel columns + validation in quote/create.* |
 | **FR-V5** | **Soft hold** (optional): temporary inventory lock with TTL before payment or confirmation. |
 
 ### 2.3 Reservations and guests
@@ -144,3 +151,4 @@ Prioritize into releases (e.g. commercial → search → operations).
 |------|--------|
 | 2026-04-12 | Initial document: §1 as-built through migration 0012; §2 backlog. |
 | 2026-04-12 | Link to `IMPLEMENTATION_PLAN.md` for phased backlog delivery. |
+| 2026-04-07 | §1 through migration **0014** (rate plans, promotions, blocks, policies, search, calendar); §2 notes for shipped **FR-C1–C3**, **FR-V1–V4**; **§1.3b** (**FR-V1/V2** as-built). |

@@ -65,6 +65,32 @@ export function parseCreateBody(raw: unknown):
   if (phone !== undefined && phone !== null && typeof phone !== "string") {
     return { ok: false, detail: "guest.phone must be a string if present" };
   }
+  let rate_plan_code: string | null | undefined;
+  if ("rate_plan_code" in o) {
+    const r = o.rate_plan_code;
+    if (r === null || r === undefined) {
+      rate_plan_code = null;
+    } else if (typeof r === "string") {
+      const t = r.trim();
+      rate_plan_code = t === "" ? null : t;
+    } else {
+      return { ok: false, detail: "rate_plan_code must be a string or null" };
+    }
+  }
+
+  let promotion_code: string | null | undefined;
+  if ("promotion_code" in o) {
+    const p = o.promotion_code;
+    if (p === null || p === undefined) {
+      promotion_code = null;
+    } else if (typeof p === "string") {
+      const t = p.trim();
+      promotion_code = t === "" ? null : t;
+    } else {
+      return { ok: false, detail: "promotion_code must be a string or null" };
+    }
+  }
+
   let expected_total_cents: number | null | undefined;
   if ("expected_total_cents" in o) {
     const e = o.expected_total_cents;
@@ -86,6 +112,8 @@ export function parseCreateBody(raw: unknown):
       room_type_id: room_type_id.trim(),
       check_in,
       check_out,
+      rate_plan_code,
+      promotion_code,
       expected_total_cents,
       guest: {
         first_name: first_name.trim(),

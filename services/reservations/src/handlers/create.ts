@@ -49,6 +49,8 @@ export async function createReservation(c: Context<{ Bindings: Env }>) {
   if (b.expected_total_cents != null) {
     rpcArgs.p_expected_total_cents = b.expected_total_cents;
   }
+  rpcArgs.p_rate_plan_code = b.rate_plan_code ?? null;
+  rpcArgs.p_promotion_code = b.promotion_code ?? null;
   const { data, error } = await supa.rpc(
     "create_reservation_idempotent",
     rpcArgs

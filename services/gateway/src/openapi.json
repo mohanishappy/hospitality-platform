@@ -208,11 +208,143 @@
         }
       }
     },
+    "/v1/inventory/search": {
+      "get": {
+        "tags": ["Inventory"],
+        "summary": "Search bookable room types for a stay (FR-V1)",
+        "description": "Returns all room types in the chain (optionally filtered by **`hotel_ids`**) that pass **hotel booking policies**. Each row includes **`bookable`**, **`pricing`** (same rules as **GET …/availability**), and identifiers. Sort by **`price`** (default) or **`bookable`** first.",
+        "operationId": "inventorySearchStays",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "check_in",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "format": "date" }
+          },
+          {
+            "name": "check_out",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "format": "date" }
+          },
+          {
+            "name": "hotel_ids",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "Comma-separated hotel UUIDs; omit for all hotels in the chain."
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["price", "bookable"], "default": "price" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 }
+          },
+          {
+            "name": "rate_plan_code",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Optional rate plan code (must match when set)."
+          },
+          {
+            "name": "promotion_code",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Optional promotion code."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ordered search hits",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["results"],
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/InventorySearchHit" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Problem" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/v1/inventory/hotels/{hotelId}/room-types/{roomTypeId}/calendar": {
+      "get": {
+        "tags": ["Inventory"],
+        "summary": "Per-day availability for a room type (FR-V2)",
+        "description": "Half-open **`[from, to)`** date range. Each day includes **occupancy**, **units_blocked** (maintenance/holds), **sellable_capacity**, **remaining_units**, and **bookable**.",
+        "operationId": "getRoomTypeAvailabilityCalendar",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "hotelId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "roomTypeId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "format": "date" }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "format": "date" },
+            "description": "Exclusive end date"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of day objects",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["days"],
+                  "properties": {
+                    "days": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/CalendarDay" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Problem" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
     "/v1/inventory/hotels/{hotelId}/room-types/{roomTypeId}/availability": {
       "get": {
         "tags": ["Inventory"],
         "summary": "Availability and price quote for a stay",
-        "description": "Per-**night** capacity: sellable units = **`units_total` + `overbooking_allowance`**. A stay is bookable when **every** night in **[check_in, check_out)** has fewer overlapping **pending**/**confirmed** reservations than that cap. **Pricing** uses **`base_rate_cents` × nights**, **tax** from **`tax_rate_bps`** (basis points), plus **`fee_fixed_cents`** per stay.",
+        "description": "Per-**night** capacity: sellable units = **`units_total` + `overbooking_allowance` − inventory blocks**. A stay is bookable when **every** night in **[check_in, check_out)** has remaining capacity. **Pricing** resolves **rate plans** (LOS tiers) and optional **promotions**, then **tax** and **fees** (see migration **0014**).",
         "operationId": "getRoomTypeAvailability",
         "security": [{ "bearerAuth": [] }],
         "parameters": [
@@ -241,6 +373,20 @@
             "required": true,
             "schema": { "type": "string", "format": "date" },
             "description": "Departure (YYYY-MM-DD), exclusive; must be after check_in"
+          },
+          {
+            "name": "rate_plan_code",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "Optional rate plan code."
+          },
+          {
+            "name": "promotion_code",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "Optional promotion code."
           }
         ],
         "responses": {
@@ -595,12 +741,45 @@
         "properties": {
           "currency": { "type": "string" },
           "base_rate_cents_per_night": { "type": "integer", "nullable": true },
+          "nightly_rate_cents": { "type": "integer", "nullable": true, "description": "After rate plan / LOS tier resolution" },
           "nights": { "type": "integer" },
           "room_subtotal_cents": { "type": "integer", "nullable": true },
+          "discount_cents": { "type": "integer", "description": "Promotion discount on room subtotal before tax" },
           "tax_rate_bps": { "type": "integer" },
           "tax_cents": { "type": "integer" },
           "fee_fixed_cents": { "type": "integer" },
-          "total_cents": { "type": "integer" }
+          "fee_line_items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/FeeLineItem" }
+          },
+          "total_cents": { "type": "integer" },
+          "rate_plan_code": { "type": "string", "nullable": true },
+          "promotion_code": { "type": "string", "nullable": true }
+        }
+      },
+      "InventorySearchHit": {
+        "type": "object",
+        "properties": {
+          "hotel_id": { "type": "string" },
+          "hotel_name": { "type": "string" },
+          "room_type_id": { "type": "string" },
+          "room_type_name": { "type": "string" },
+          "check_in": { "type": "string", "format": "date" },
+          "check_out": { "type": "string", "format": "date" },
+          "nights": { "type": "integer" },
+          "bookable": { "type": "boolean" },
+          "pricing": { "type": "object", "description": "Output of compute_stay_pricing (JSON)" }
+        }
+      },
+      "CalendarDay": {
+        "type": "object",
+        "properties": {
+          "date": { "type": "string", "format": "date" },
+          "occupancy": { "type": "integer" },
+          "units_blocked": { "type": "integer" },
+          "sellable_capacity": { "type": "integer" },
+          "remaining_units": { "type": "integer" },
+          "bookable": { "type": "boolean" }
         }
       },
       "FeeLineItem": {
@@ -680,6 +859,16 @@
           "room_type_id": { "type": "string", "format": "uuid" },
           "check_in": { "type": "string", "format": "date", "example": "2026-06-01" },
           "check_out": { "type": "string", "format": "date", "example": "2026-06-04" },
+          "rate_plan_code": {
+            "type": "string",
+            "nullable": true,
+            "description": "Optional; must match server pricing when set."
+          },
+          "promotion_code": {
+            "type": "string",
+            "nullable": true,
+            "description": "Optional promotion code."
+          },
           "expected_total_cents": {
             "type": "integer",
             "minimum": 0,
