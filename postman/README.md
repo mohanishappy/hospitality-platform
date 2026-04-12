@@ -4,10 +4,18 @@
 
 | Artifact | Role |
 |----------|------|
-| **Collection** (`*.postman_collection.json`) | Folders per API area, request definitions, **collection variables** with safe defaults, optional **test** scripts. |
-| **Environment** (`*.postman_environment.json`) | **Secrets** (`access_token`), **per-developer URLs**, and UUIDs you are testing (`hotel_id`, `room_type_id`). Never commit real tokens. |
+| **Collection** (`*.postman_collection.json`) | Folders per API area, request definitions, **collection variables** for ids (`hotel_id`, `room_type_id`, `reservation_id`, `idempotency_key`) and defaults, plus **test** / pre-request scripts. |
+| **Environment** (`*.postman_environment.json`) | **`baseUrl`**, **`access_token`** (secret), **`check_in`** / **`check_out`**. Do **not** add empty placeholders for `hotel_id` / `room_type_id` / `reservation_id` / `idempotency_key` — see below. Never commit real tokens. |
 
-Use **Collection** for structure and shared behavior; use **Environment** for values that change per person or per deploy. Select the environment in Postman’s top-right dropdown so `{{baseUrl}}` and `{{access_token}}` resolve correctly.
+### Variable resolution (important)
+
+Postman resolves the **same** `{{name}}` with **environment before collection**. An **empty string** in the environment still **wins** over a non-empty **collection** value. That used to break flows where tests wrote ids to the collection but the example environment also defined those keys as `""`.
+
+The **example** environment only defines `baseUrl`, `access_token`, `check_in`, and `check_out`. After a successful **GET List hotels** / **GET Room types** / **POST Create reservation**, scripts write ids to **both** collection and the **active** environment (when one is selected) so URLs and headers stay in sync.
+
+If you have an **older** `*.local.postman_environment.json` with empty `hotel_id` / `room_type_id` / etc., **delete those keys** in Postman (or re-copy the example file) so they do not shadow the collection.
+
+Select the environment in Postman’s top-right dropdown so `{{baseUrl}}` and `{{access_token}}` resolve correctly.
 
 ---
 
@@ -41,15 +49,15 @@ Top-right environment dropdown → choose **`Hospitality — example (local)`** 
 
 ### 4. Fill variables (required before bookings)
 
-| Variable | What to put |
-|----------|-------------|
-| **`baseUrl`** | Gateway root only, no trailing slash, e.g. `https://hospitality-gateway.your-subdomain.workers.dev` |
-| **`access_token`** | Auth0 **access token** whose `aud` is your API identifier and that includes claim **`https://hospitality.app/claims/chain_id`** (UUID matching `inventory.chain` for this tenant) |
-| **`hotel_id`** | UUID of a hotel for that chain (from **GET List hotels** or Supabase **Table Editor** → `inventory.hotel`) |
-| **`room_type_id`** | UUID of a **room_type** row for **that** hotel (`inventory.room_type`, same `hotel_id`) |
-| **`check_in` / `check_out`** | `YYYY-MM-DD`; **`check_out`** must be **after** **`check_in`** |
-| **`reservation_id`** | Leave empty until **POST Create reservation** runs; tests fill it |
-| **`idempotency_key`** | Leave empty; pre-request generates a GUID. Clear to start a **new** booking; keep the same value to test replay (**200**) |
+| Variable | Where | What to put |
+|----------|--------|-------------|
+| **`baseUrl`** | Environment | Gateway root only, no trailing slash, e.g. `https://hospitality-gateway.your-subdomain.workers.dev` |
+| **`access_token`** | Environment | Auth0 **access token** whose `aud` is your API identifier and that includes claim **`https://hospitality.app/claims/chain_id`** (UUID matching `inventory.chain` for this tenant) |
+| **`check_in` / `check_out`** | Environment | `YYYY-MM-DD`; **`check_out`** must be **after** **`check_in`** |
+| **`hotel_id`** | Collection (default) | Filled by **GET List hotels** on success; or set manually on the collection. Optional: add to environment with a **real** UUID only — never `""`. |
+| **`room_type_id`** | Collection (default) | Filled by **GET Room types**; or set manually. Same rule as `hotel_id`. |
+| **`reservation_id`** | Collection (default) | Filled by **POST Create reservation** on success. |
+| **`idempotency_key`** | Collection / env | Pre-request generates a GUID when the resolved value is blank (writes **collection** and **active environment**). Clear for a **new** booking; keep for replay (**200**). |
 
 ### 5. Get an M2M access token (example)
 
@@ -86,6 +94,7 @@ Copy **`access_token`** from the JSON into Postman **`access_token`**.
 - **GET** `/v1/inventory/hotels` — Bearer token (tests may set `hotel_id` from first row).
 - **GET** `/v1/inventory/hotels/:id` — Bearer; e.g. `{{hotel_id}}`.
 - **GET** `/v1/inventory/hotels/:hotelId/room-types` — Bearer; e.g. `{{hotel_id}}` (tests may set `room_type_id`).
+- **GET** `/v1/inventory/hotels/:hotelId/room-types/:roomTypeId/availability?check_in=&check_out=` — Bearer; quote + per-night bookability (uses `{{hotel_id}}`, `{{room_type_id}}`, `{{check_in}}`, `{{check_out}}`).
 - **GET** `/v1/reservations` — Bearer; optional `limit` / `offset` query params.
 - **POST** `/v1/reservations` — Bearer + `Idempotency-Key` + JSON body (see request description).
 - **GET** `/v1/reservations/:id` — Bearer; uses `{{reservation_id}}`.
@@ -98,10 +107,10 @@ Copy **`access_token`** from the JSON into Postman **`access_token`**.
 
 **POST Create reservation** pre-request:
 
-- If **`idempotency_key`** is missing or blank in **environment** and collection, it sets a new **`{{$guid}}`** (and writes it to the **active environment** when one is selected, plus collection).
-- If Postman resolves **`{{idempotency_key}}`** from the environment as an **empty** string, the script treats that as “unset” and generates a key (fixed in the collection scripts).
+- Reads the **effective** value via **`pm.variables.get('idempotency_key')`** (same resolution order as `{{idempotency_key}}` in the header: environment overrides collection).
+- If that value is blank after trim, it generates a new **`{{$guid}}`**, sets **`idempotency_key`** on the **collection**, and on the **active environment** when one is selected (so the header for that request is not stuck on an empty env value).
 
-For a **new** booking: clear **`idempotency_key`** in your **environment**.  
+For a **new** booking: clear **`idempotency_key`** (environment and/or collection).  
 For a **replay** test: do not clear it; send **POST** again with the same body → expect **200** and **`idempotent_replay: true`**.
 
 ---

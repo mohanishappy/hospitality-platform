@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "a1b2c3d4-hosp-0001-gateway",
     "name": "Hospitality Platform — Gateway API",
-    "description": "Calls the **gateway** only (inventory + reservations).\n\n**Setup:** import the example environment, set `baseUrl` and `access_token` (Auth0 access token with your API `aud` and claim `https://hospitality.app/claims/chain_id`), then set `hotel_id` + `room_type_id` for your tenant.\n\n**Conventions:** folders group by domain; auth is inherited (Bearer on protected folders). Health uses `noauth`.",
+    "description": "Calls the **gateway** only (inventory + reservations).\n\n**Setup:** import the example environment, set `baseUrl` and `access_token` (Auth0 access token with your API `aud` and claim `https://hospitality.app/claims/chain_id`). Run **GET List hotels** then **GET Room types** so **collection** variables `hotel_id` / `room_type_id` fill in (or set them manually on the collection).\n\n**Variables:** Postman resolves **environment** before **collection** for the same name. Empty strings in the environment **override** collection values — the example env only defines `baseUrl`, `access_token`, `check_in`, and `check_out` so ids from tests are not shadowed. To pin `hotel_id` in the environment, add the key with a **real UUID** (never an empty placeholder).\n\n**Conventions:** folders group by domain; auth is inherited (Bearer on protected folders). Health uses `noauth`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -98,7 +98,7 @@
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/v1/inventory/hotels",
-            "description": "Returns `hotels[]` for the JWT `chain_id`. On **200**, saves first hotel `id` to `hotel_id` (environment + collection) when present."
+            "description": "Returns `hotels[]` for the JWT `chain_id`. On **200**, saves first hotel `id` to **collection** and to the **active environment** (if any) so `{{hotel_id}}` resolves correctly."
           },
           "response": []
         },
@@ -141,6 +141,16 @@
             "description": "`room_types[]` for this hotel. On **200**, saves first type `id` to `room_type_id`. Run after **GET List hotels** (or set `hotel_id` manually)."
           },
           "response": []
+        },
+        {
+          "name": "GET Room type availability & quote",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/inventory/hotels/{{hotel_id}}/room-types/{{room_type_id}}/availability?check_in={{check_in}}&check_out={{check_out}}",
+            "description": "Per-night **bookable** + **pricing** (`tax_rate_bps`, `fee_fixed_cents`). Query dates must match **POST /v1/reservations** window. Requires Supabase migration **0012**."
+          },
+          "response": []
         }
       ],
       "description": "Bearer token required; gateway injects `x-chain-id`."
@@ -179,13 +189,14 @@
                   "    if (v === undefined || v === null) return '';",
                   "    return String(v).trim();",
                   "}",
-                  "var k = __t(pm.environment.get('idempotency_key')) || __t(pm.collectionVariables.get('idempotency_key'));",
+                  "// Resolved value: environment wins over collection. Generate only when blank.",
+                  "var k = __t(pm.variables.get('idempotency_key'));",
                   "if (!k) {",
                   "    k = pm.variables.replaceIn('{{$guid}}');",
+                  "    pm.collectionVariables.set('idempotency_key', k);",
                   "    if (pm.environment.name) {",
                   "        pm.environment.set('idempotency_key', k);",
                   "    }",
-                  "    pm.collectionVariables.set('idempotency_key', k);",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -224,7 +235,7 @@
               {
                 "key": "Idempotency-Key",
                 "value": "{{idempotency_key}}",
-                "description": "Pinned in collection var on first run (pre-request). Clear `idempotency_key` to force a new key, or set manually for replay tests."
+                "description": "Resolved from environment or collection; pre-request generates a GUID into **collection** when blank. Clear `idempotency_key` (collection or env) for a new booking; keep the same value to replay (**200**)."
               }
             ],
             "body": {
@@ -232,7 +243,7 @@
               "raw": "{\n  \"hotel_id\": \"{{hotel_id}}\",\n  \"room_type_id\": \"{{room_type_id}}\",\n  \"check_in\": \"{{check_in}}\",\n  \"check_out\": \"{{check_out}}\",\n  \"guest\": {\n    \"first_name\": \"Ada\",\n    \"last_name\": \"Lovelace\",\n    \"email\": \"ada@example.com\",\n    \"phone\": \"+1-555-0100\"\n  }\n}"
             },
             "url": "{{baseUrl}}/v1/reservations",
-            "description": "First send sets `reservation_id` on the **active environment** (if any) and collection. For a **new** booking, clear **`idempotency_key`** in the **environment** (or collection); pre-request fills a new GUID. Re-send **without** clearing to test replay (**200** + `idempotent_replay: true`). After **`0011`**, **400** if overlapping **pending**/**confirmed** bookings meet **`room_type.units_total`** for **[check_in, check_out)**."
+            "description": "First send sets **`reservation_id`** on the **collection** (use **Collection** → **Variables** to inspect). For a **new** booking, clear **`idempotency_key`**; pre-request fills a new GUID on the collection when resolved value is blank. Re-send **without** clearing to test replay (**200** + `idempotent_replay: true`). After **`0011`**, **400** if overlapping **pending**/**confirmed** bookings meet **`room_type.units_total`** for **[check_in, check_out)**."
           },
           "response": []
         },
@@ -242,7 +253,7 @@
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/v1/reservations/{{reservation_id}}",
-            "description": "Uses `{{reservation_id}}` from the **environment** (if set) or collection, saved by **POST Create reservation**. Set manually if needed."
+            "description": "Uses `{{reservation_id}}` (Postman: **environment** overrides **collection** for the same name). Saved to **collection** by **POST Create reservation**; set manually on the collection or in the environment if needed."
           },
           "response": []
         },

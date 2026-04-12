@@ -10,7 +10,7 @@ Microservices on **Cloudflare Workers** with **Supabase Postgres** and **Auth0**
 | `services/gateway` | Validates Auth0 JWTs, forwards to workers via **service bindings** (same URL path) |
 | `services/inventory` | Hotels + **room types** (list/detail under gateway) |
 | `services/reservations` | **POST/PATCH/GET** reservations; list; **status** lifecycle; idempotent **201**/**200** on create |
-| `supabase/migrations` | SQL: through **`0011` — room_type units/pricing + booking availability** |
+| `supabase/migrations` | SQL: through **`0012` — nightly availability, commercial fields, quote RPC** |
 | `postman/` | Postman **collection** + **example environment** for gateway requests ([`postman/README.md`](postman/README.md)) |
 
 **API spec (gateway, public):** `GET /openapi.json` (OpenAPI 3.0); `GET /docs` (Swagger UI — use **Authorize** with a Bearer token for protected operations). Contract source: `services/gateway/src/openapi.json`.
@@ -25,7 +25,7 @@ Microservices on **Cloudflare Workers** with **Supabase Postgres** and **Auth0**
 ## 1) Supabase
 
 1. Create a project.
-2. Run migrations in order in the SQL editor (or `supabase db push`): [`0001_init.sql`](supabase/migrations/0001_init.sql) through [`0011_room_type_units_pricing_and_availability.sql`](supabase/migrations/0011_room_type_units_pricing_and_availability.sql) — see earlier numbered files for inventory/reservations/RPC history.
+2. Run migrations in order in the SQL editor (or `supabase db push`): [`0001_init.sql`](supabase/migrations/0001_init.sql) through [`0012_nightly_availability_and_commercial.sql`](supabase/migrations/0012_nightly_availability_and_commercial.sql) — see earlier numbered files for inventory/reservations/RPC history.
 3. **Turn on the Data API** (REST / PostgREST): Dashboard → **Project Settings** → **Data API** — use **Enable** if the API is off. Your Workers call this layer; it must be on.
 4. **Expose API schemas** (required for `supabase-js` `.schema(...)`): same **Data API** page (or **Project Settings → API** on older dashboards) → **Exposed schemas**. Include at least `public`, `inventory`, and `reservations` (comma-separated; keep existing entries like `public`). Save. Without this, hotels returns `Invalid schema: inventory`.  
    *Some UIs only show “Exposed schemas” after the Data API is enabled.*
@@ -73,6 +73,21 @@ cd ../reservations
 npx wrangler secret put SUPABASE_URL
 npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 ```
+
+### Automated deploy (GitHub Actions)
+
+On every push to **`main`**, [`.github/workflows/deploy-workers.yml`](.github/workflows/deploy-workers.yml) runs **`npm ci`**, typechecks all three Workers, then deploys **inventory → reservations → gateway** (same order as `npm run deploy:all`).
+
+**Repository secrets** (GitHub → **Settings** → **Secrets and variables** → **Actions**):
+
+| Secret | Value |
+|--------|--------|
+| **`CLOUDFLARE_API_TOKEN`** | API token with **Workers Scripts: Edit** (and **Account: Read** if prompted). Create under [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens) (e.g. “Edit Cloudflare Workers” template, scoped to the right account). |
+| **`CLOUDFLARE_ACCOUNT_ID`** | Cloudflare account ID (Workers dashboard URL or **Account Home** → right sidebar). |
+
+**Not stored in GitHub:** Worker runtime secrets (`SUPABASE_*`, `AUTH0_*`). Set those once per Worker with `wrangler secret put` (or the dashboard); CI only publishes new **code** bundles.
+
+You can re-run a deploy from the **Actions** tab (**Run workflow**) without pushing.
 
 ## Postman
 
@@ -132,7 +147,8 @@ npm run dev:gateway        # other terminal; needs bindings to the other two
 - `GET /health` — no auth.
 - `GET /v1/inventory/hotels` — Bearer + claim `https://hospitality.app/claims/chain_id`.
 - `GET /v1/inventory/hotels/:id` — same; one hotel for that chain (**404** if wrong id/chain).
-- `GET /v1/inventory/hotels/:hotelId/room-types` — same; **`room_types[]`** include **`units_total`** (parallel inventory), **`base_rate_cents`**, **`currency`** after **`0011`** (**404** if hotel not in chain).
+- `GET /v1/inventory/hotels/:hotelId/room-types` — same; **`room_types[]`** include **`units_total`**, **`overbooking_allowance`**, **`base_rate_cents`**, **`currency`**, **`tax_rate_bps`**, **`fee_fixed_cents`** after **`0012`** (**404** if hotel not in chain).
+- `GET /v1/inventory/hotels/:hotelId/room-types/:roomTypeId/availability?check_in=&check_out=` — per-**night** **bookable** flag + **pricing** quote (needs **`0012`**).
 - `GET /v1/reservations` — same auth; paginated list for the token’s **`chain_id`** (`?limit` default 20 max 100, `?offset` default **0**); body omits **`guest`** (use **GET …/:id**).
 - `POST /v1/reservations` — same auth + `Idempotency-Key` + JSON body (`hotel_id`, `room_type_id`, `check_in` / `check_out` as **YYYY-MM-DD**, nested `guest`).
 - `GET /v1/reservations/:id` — same auth; returns reservation + nested **`guest`** for that `chain_id`.
@@ -143,9 +159,9 @@ npm run dev:gateway        # other terminal; needs bindings to the other two
 
 - Multi-chain: all tenant rows include `chain_id`; gateway enforces token `chain_id` vs path/body.
 - Errors: **RFC 7807** `application/problem+json`.
-- Bookings: **`Idempotency-Key`** on `POST /v1/reservations`; stays are **date-only** with `check_out` **after** `check_in`. Intervals are treated as **[check_in, check_out)** (half-open) for **overlap** with **`room_type.units_total`** (`pending` + `confirmed` count; **`0011`**). Reservation **status**: `pending`, `confirmed`, `cancelled` (**`0009`**).
+- Bookings: **`Idempotency-Key`** on `POST /v1/reservations`; stays are **date-only** with `check_out` **after** `check_in`. Capacity is **per night**: each night in **[check_in, check_out)** may have at most **`units_total` + `overbooking_allowance`** overlapping **pending**/**confirmed** stays (**`0012`** replaces interval-only counting). **Commercial:** **`tax_rate_bps`** on room subtotal, **`fee_fixed_cents`** per stay (quote via **GET …/availability**). Reservation **status**: `pending`, `confirmed`, `cancelled` (**`0009`**).
 
 ## Next steps
 
-- Per-night or **deduped** availability, overbooking rules, **taxes/fees** on `base_rate_cents`.
+- Richer **commercial** rules (LOS pricing, promos, itemized fees), **calendar** inventory UI, **rate plans**.
 - Lightweight **UI** (Vite + React) with Auth0 SPA + gateway calls.

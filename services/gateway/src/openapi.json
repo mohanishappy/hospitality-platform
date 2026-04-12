@@ -162,6 +162,62 @@
         }
       }
     },
+    "/v1/inventory/hotels/{hotelId}/room-types/{roomTypeId}/availability": {
+      "get": {
+        "tags": ["Inventory"],
+        "summary": "Availability and price quote for a stay",
+        "description": "Per-**night** capacity: sellable units = **`units_total` + `overbooking_allowance`**. A stay is bookable when **every** night in **[check_in, check_out)** has fewer overlapping **pending**/**confirmed** reservations than that cap. **Pricing** uses **`base_rate_cents` × nights**, **tax** from **`tax_rate_bps`** (basis points), plus **`fee_fixed_cents`** per stay.",
+        "operationId": "getRoomTypeAvailability",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "hotelId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "roomTypeId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "check_in",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "format": "date" },
+            "description": "Arrival (YYYY-MM-DD), inclusive"
+          },
+          {
+            "name": "check_out",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "format": "date" },
+            "description": "Departure (YYYY-MM-DD), exclusive; must be after check_in"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Quote and occupancy snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["availability"],
+                  "properties": {
+                    "availability": { "$ref": "#/components/schemas/AvailabilityQuote" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Problem" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
     "/v1/reservations": {
       "get": {
         "tags": ["Reservations"],
@@ -208,7 +264,7 @@
       "post": {
         "tags": ["Reservations"],
         "summary": "Create reservation (idempotent)",
-        "description": "Requires **`Idempotency-Key`** (UUID recommended). First request **201** + `idempotent_replay: false`; same key replays **200** + `idempotent_replay: true`. Dates **YYYY-MM-DD**; stay is **[check_in, check_out)** for overlap rules vs `room_type.units_total`.",
+        "description": "Requires **`Idempotency-Key`** (UUID recommended). First request **201** + `idempotent_replay: false`; same key replays **200** + `idempotent_replay: true`. Dates **YYYY-MM-DD**; availability is **per night**: **`units_total` + `overbooking_allowance`** must exceed concurrent **pending**/**confirmed** stays on each night in **[check_in, check_out)** (see **GET …/availability**).",
         "operationId": "createReservation",
         "security": [{ "bearerAuth": [] }],
         "parameters": [
@@ -428,7 +484,41 @@
           "created_at": { "type": "string", "format": "date-time" },
           "units_total": { "type": "integer" },
           "base_rate_cents": { "type": "integer", "nullable": true },
-          "currency": { "type": "string", "nullable": true }
+          "currency": { "type": "string", "nullable": true },
+          "overbooking_allowance": { "type": "integer", "description": "Extra sellable units beyond units_total (oversell cap)" },
+          "tax_rate_bps": { "type": "integer", "description": "Tax in basis points (10000 = 100%) applied to room subtotal" },
+          "fee_fixed_cents": { "type": "integer", "description": "Flat fee per stay in minor units" }
+        }
+      },
+      "AvailabilityQuote": {
+        "type": "object",
+        "description": "JSON object returned by room_type_availability_quote RPC",
+        "properties": {
+          "room_type_id": { "type": "string" },
+          "hotel_id": { "type": "string" },
+          "check_in": { "type": "string", "format": "date" },
+          "check_out": { "type": "string", "format": "date" },
+          "nights": { "type": "integer" },
+          "units_total": { "type": "integer" },
+          "overbooking_allowance": { "type": "integer" },
+          "sellable_capacity": { "type": "integer" },
+          "max_night_occupancy": { "type": "integer" },
+          "remaining_units_on_tightest_night": { "type": "integer" },
+          "bookable": { "type": "boolean" },
+          "pricing": { "$ref": "#/components/schemas/StayPricingQuote" }
+        }
+      },
+      "StayPricingQuote": {
+        "type": "object",
+        "properties": {
+          "currency": { "type": "string" },
+          "base_rate_cents_per_night": { "type": "integer", "nullable": true },
+          "nights": { "type": "integer" },
+          "room_subtotal_cents": { "type": "integer", "nullable": true },
+          "tax_rate_bps": { "type": "integer" },
+          "tax_cents": { "type": "integer" },
+          "fee_fixed_cents": { "type": "integer" },
+          "total_cents": { "type": "integer" }
         }
       },
       "ReservationListItem": {

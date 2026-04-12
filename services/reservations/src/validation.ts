@@ -147,11 +147,14 @@ export function parseGuestPatchBody(raw: unknown):
     patch.email = o.email.trim();
   }
   if ("phone" in o) {
-    if (o.phone !== null && typeof o.phone !== "string") {
+    const v = o.phone;
+    if (v === null) {
+      patch.phone = null;
+    } else if (typeof v === "string") {
+      patch.phone = v.trim() === "" ? null : v.trim();
+    } else {
       return { ok: false, detail: "phone must be a string or null" };
     }
-    patch.phone =
-      o.phone === null ? null : o.phone.trim() === "" ? null : o.phone.trim();
   }
   if (Object.keys(patch).length === 0) {
     return {
