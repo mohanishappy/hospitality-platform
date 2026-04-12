@@ -55,4 +55,4 @@ jobs:
             exit 1
           fi
           supabase link --project-ref "$PROJECT_REF"
-          supabase db push
+          supabase db push --yes

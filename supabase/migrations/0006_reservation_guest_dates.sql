@@ -48,7 +48,8 @@ grant select, insert, update, delete on table reservations.guest to service_role
 -- Replace idempotent create (full booking). Old signature removed.
 drop function if exists public.create_reservation_idempotent (uuid, text);
 
-create function public.create_reservation_idempotent (
+-- OR REPLACE: safe when remote already has this signature (manual SQL / replay).
+create or replace function public.create_reservation_idempotent (
   p_chain_id uuid,
   p_idempotency_key text,
   p_hotel_id uuid,

@@ -3,7 +3,7 @@
 
 drop function if exists public.create_reservation_idempotent (uuid, text);
 
-create function public.create_reservation_idempotent (p_chain_id uuid, p_idempotency_key text)
+create or replace function public.create_reservation_idempotent (p_chain_id uuid, p_idempotency_key text)
 returns jsonb
 language plpgsql
 security definer
