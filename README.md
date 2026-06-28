@@ -12,8 +12,9 @@ Microservices on **Cloudflare Workers** with **Supabase Postgres** and **Auth0**
 | `services/reservations` | **POST/PATCH/GET** reservations; list; **status** lifecycle; idempotent **201**/**200** on create |
 | `supabase/config.toml` | Supabase CLI config (local dev / **`supabase db push`** to a linked project) |
 | `supabase/migrations` | SQL: through **`0016` — cancellation metadata, reservation notes, soft holds, ETags, rate plans, search, calendar** |
+| `apps/web` | **Phase 8A** SPA shell — Vite + React + Auth0; gateway health + hotels list ([`.env.example`](apps/web/.env.example)) |
 | `postman/` | Postman **collection** + **example environment** for gateway requests ([`postman/README.md`](postman/README.md)) |
-| `docs/FR_STATUS.md` | Backlog **FR** status through phases **0–6** (what shipped vs planned) |
+| `docs/FR_STATUS.md` | Backlog **FR** status through phases **0–7** (what shipped vs planned) |
 | `scripts/smoke-deploy-public.mjs` | Post-deploy public smoke (`npm run smoke:deploy`; CI **smoke** job on `main`) |
 | `scripts/smoke-api.mjs` | Golden-path booking smoke (`npm run smoke:api`; optional CI step with **`SMOKE_ACCESS_TOKEN`**) |
 | `scripts/run-newman.mjs` | Newman Postman run (`npm run smoke:newman`; optional CI step) |
@@ -106,16 +107,17 @@ npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 
 ### Automated deploy (GitHub Actions)
 
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on **every push and pull request**: **`npm ci`**, **`npm test`** (including OpenAPI contract guard), then **typechecks** all three Workers. On **`main`** only (push or **Run workflow**), it applies **Supabase migrations** (`supabase db push`), deploys **inventory → reservations → gateway**, then **post-deploy smoke** against **`GATEWAY_BASE_URL`**.
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on **every push and pull request**: **`npm ci`**, **`npm test`** (including OpenAPI contract guard), then **typechecks** all services including **`apps/web`**. On **`main`** only (push or **Run workflow**), it applies **Supabase migrations** (`supabase db push`), deploys **inventory → reservations → gateway**, deploys **`apps/web`** to **Cloudflare Pages** (when Auth0 secrets are set), then **post-deploy smoke** against **`GATEWAY_BASE_URL`**.
 
 **Repository secrets** (GitHub → **Settings** → **Secrets and variables** → **Actions**):
 
 | Secret | Value |
 |--------|--------|
 | **`SUPABASE_ACCESS_TOKEN`**, **`SUPABASE_PROJECT_REF`**, **`SUPABASE_DB_PASSWORD`** | Required for the **migrate** job on `main` (see [Database migrations](#database-migrations-cli-or-github-actions) above). |
-| **`CLOUDFLARE_API_TOKEN`** | API token with **Workers Scripts: Edit** (and **Account: Read** if prompted). Create under [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens) (e.g. “Edit Cloudflare Workers” template, scoped to the right account). |
+| **`CLOUDFLARE_API_TOKEN`** | API token with **Workers Scripts: Edit** and **Cloudflare Pages: Edit** (and **Account: Read** if prompted). Create under [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens) (e.g. “Edit Cloudflare Workers” template, scoped to the right account — add **Pages** permission). |
 | **`CLOUDFLARE_ACCOUNT_ID`** | Cloudflare account ID (Workers dashboard URL or **Account Home** → right sidebar). |
-| **`GATEWAY_BASE_URL`** | Deployed gateway root (no trailing slash) — **smoke** job after deploy. |
+| **`GATEWAY_BASE_URL`** | Deployed gateway root (no trailing slash) — **smoke** job after deploy; also **`VITE_GATEWAY_URL`** at web build time. |
+| **`VITE_AUTH0_DOMAIN`**, **`VITE_AUTH0_CLIENT_ID`**, **`VITE_AUTH0_AUDIENCE`** | Auth0 SPA settings for **`apps/web`** production build. **Web deploy is skipped** on `main` when **`VITE_AUTH0_CLIENT_ID`** is unset. |
 | **`SMOKE_ACCESS_TOKEN`** | Optional M2M token for golden-path **`smoke-api.mjs`** in CI; skipped when unset. |
 
 **Not stored in GitHub:** Worker runtime secrets (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `AUTH0_*`). Set those once per Worker with `wrangler secret put` (or the dashboard); CI only publishes new **code** bundles and runs **remote** DB migrations against the linked Supabase project.
@@ -138,6 +140,43 @@ Optional gateway secrets for **`GET /health/ready`** Supabase ping: `SUPABASE_UR
 Import **`postman/hospitality-platform.postman_collection.json`**, create a **local** env (copy the example to `postman/hospitality-platform.local.postman_environment.json` — gitignored — see [**Local environment setup**](postman/README.md#local-environment-setup)), then set **`baseUrl`** and **`access_token`** in the **environment** (they override empty collection values). **`hotel_id`**, **`room_type_id`**, **`reservation_id`**, **`idempotency_key`**, optional **`rate_plan_code`** / **`promotion_code`**, **`search_hotel_ids`**, and **`calendar_from`** / **`calendar_to`** live on the **collection** by default (or in the env only when set to real values — never `""`). Full guide: [`postman/README.md`](postman/README.md).
 
 Responses include **`x-request-id`** for correlation; send the same header to trace a request end-to-end.
+
+## Web app (Phase 8A)
+
+Staff/guest **SPA shell** under [`apps/web`](apps/web): Auth0 login, live **`/health`** + **`/health/ready`**, and authenticated **`GET /v1/inventory/hotels`**.
+
+1. In Auth0, create a **Single Page Application** (separate from M2M). Set **Allowed Callback URLs**, **Allowed Logout URLs**, and **Allowed Web Origins** to `http://localhost:5173` and your production Pages URL (e.g. `https://hospitality-web.pages.dev` after first deploy). Authorize it for your API audience.
+2. For user login, add a **Post Login** Action that sets claim **`https://hospitality.app/claims/chain_id`** (same as your M2M Credentials Exchange Action).
+3. Copy [`apps/web/.env.example`](apps/web/.env.example) → `apps/web/.env` and fill **`VITE_*`** values.
+4. From repo root:
+
+```bash
+npm install
+npm run dev:web
+```
+
+Open `http://localhost:5173`, log in, and confirm hotels load for your chain.
+
+### Deploy web (Cloudflare Pages)
+
+On **`main`**, CI runs the **`deploy-web`** job when **`VITE_AUTH0_CLIENT_ID`** (and related secrets) are set in GitHub Actions. It builds **`apps/web`** with production **`VITE_*`** values and publishes to the **`hospitality-web`** Pages project.
+
+**One-time setup:**
+
+1. Add GitHub secrets **`VITE_AUTH0_DOMAIN`**, **`VITE_AUTH0_CLIENT_ID`**, **`VITE_AUTH0_AUDIENCE`** (same values as local `.env`; **`GATEWAY_BASE_URL`** is reused for the gateway).
+2. Ensure **`CLOUDFLARE_API_TOKEN`** includes **Cloudflare Pages: Edit** (update the token if Workers deploy already works but Pages fails).
+3. Push to **`main`** or **Run workflow** — first run creates the Pages project if needed.
+4. In Auth0, add the live **`*.pages.dev`** URL to callback, logout, and web origins (see step 1 above).
+
+**Manual deploy** (same build + Wrangler as CI):
+
+```bash
+export VITE_GATEWAY_URL="https://your-gateway.workers.dev"
+export VITE_AUTH0_DOMAIN="dev-xxxxx.us.auth0.com"
+export VITE_AUTH0_CLIENT_ID="your_spa_client_id"
+export VITE_AUTH0_AUDIENCE="https://hospitality-api"
+npm run deploy:web
+```
 
 ## Smoke test (gateway URL)
 

@@ -5,7 +5,8 @@
   "workspaces": [
     "services/gateway",
     "services/inventory",
-    "services/reservations"
+    "services/reservations",
+    "apps/web"
   ],
   "scripts": {
     "test": "vitest run",
@@ -13,10 +14,14 @@
     "smoke:deploy": "node scripts/smoke-deploy-public.mjs",
     "smoke:api": "node scripts/smoke-api.mjs",
     "smoke:newman": "node scripts/run-newman.mjs",
-    "typecheck": "npm run typecheck:inventory && npm run typecheck:reservations && npm run typecheck:gateway",
+    "typecheck": "npm run typecheck:inventory && npm run typecheck:reservations && npm run typecheck:gateway && npm run typecheck:web",
     "typecheck:inventory": "cd services/inventory && npx tsc --noEmit",
     "typecheck:reservations": "cd services/reservations && npx tsc --noEmit",
     "typecheck:gateway": "cd services/gateway && npx tsc --noEmit",
+    "typecheck:web": "npm run typecheck -w hospitality-web",
+    "dev:web": "npm run dev -w hospitality-web",
+    "build:web": "npm run build -w hospitality-web",
+    "deploy:web": "npm run build:web && npm run deploy -w hospitality-web",
     "dev:gateway": "npm run dev -w hospitality-gateway",
     "dev:inventory": "npm run dev -w hospitality-inventory",
     "dev:reservations": "npm run dev -w hospitality-reservations",

@@ -117,6 +117,7 @@ Split so backend can ship while UI starts:
 | **8B** | **Booking flow**: search → quote → create → confirmation page. | FR-U1 | **8A** |
 | **8C** | **Staff calendar UI**: month grid from **GET …/calendar**; read-only first. | FR-U2 | **FR-V2** |
 | **8D** | **Staff reservations**: list filters, detail, confirm/cancel/notes (roles-aware). | FR-U1 | **8A**, Phase 6 auth |
+| **8E** | **Pages deploy**: GitHub Actions **`deploy-web`** job; **`npm run deploy:web`**; SPA **`_redirects`**. | FR-U1 | **8A** |
 
 **Exit (Phase 8):** Guest can book end-to-end; staff can view calendar and manage reservations.
 
@@ -180,3 +181,5 @@ Split so backend can ship while UI starts:
 | 2026-06-27 | Phase **7 batch 1**: **7A** post-deploy smoke job + **`scripts/smoke-deploy-public.mjs`**; **7C** OpenAPI contract Vitest; **7F** README + REQUIREMENTS through **0016**. |
 | 2026-06-27 | Phase **7 batch 2**: **7B** **`scripts/smoke-api.mjs`** + optional CI step; **7E** readiness Supabase ping on gateway **`/health/ready`**. |
 | 2026-06-27 | Phase **7 batch 3**: **7D** structured logs + Analytics Engine; **7G** Newman in CI (**`scripts/run-newman.mjs`**). Phase **7 complete**. |
+| 2026-06-28 | Phase **8A**: **`apps/web`** SPA shell (Vite + React + Auth0; health + hotels list). |
+| 2026-06-28 | Phase **8E**: Cloudflare **Pages** deploy via CI **`deploy-web`** + **`npm run deploy:web`**. |

@@ -1,6 +1,6 @@
 # Feature requirement status (tracker)
 
-Aligned with [`REQUIREMENTS.md`](REQUIREMENTS.md) **§2** backlog and [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) phases 0–7 (complete).
+Aligned with [`REQUIREMENTS.md`](REQUIREMENTS.md) **§2** backlog and [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) phases 0–7 (complete); **Phase 8** in progress.
 
 | FR | Summary | Status |
 |----|---------|--------|
@@ -28,6 +28,7 @@ Aligned with [`REQUIREMENTS.md`](REQUIREMENTS.md) **§2** backlog and [`IMPLEMEN
 | FR-O3 | Readiness | **`GET /health/ready`**: JWKS + optional Supabase PostgREST ping (**7E**). |
 | FR-D1 | CI / contract tests | Vitest; OpenAPI guard; public + golden-path smoke; **Newman** optional (**7G**). |
 | FR-D2 | README / docs sync | **README** + **REQUIREMENTS §1** through migration **0016**. |
+| FR-U1 | Guest/staff SPA | **Phase 8A** — `apps/web`: Vite + React + Auth0; health + hotels list. **8E** — Cloudflare Pages CI deploy. Booking flow (**8B**) not started. |
 
 **Migrations:** apply through [`0016_cancellation_notes.sql`](../supabase/migrations/0016_cancellation_notes.sql).
 
