@@ -60,6 +60,9 @@ Top-right environment dropdown → choose **`Hospitality — example (local)`** 
 | **`room_type_id`** | Collection (default) | Filled by **GET Room types**; or set manually. Same rule as `hotel_id`. |
 | **`reservation_id`** | Collection (default) | Filled by **POST Create reservation** on success. |
 | **`idempotency_key`** | Collection / env | Pre-request generates a GUID when the resolved value is blank (writes **collection** and **active environment**). Clear for a **new** booking; keep for replay (**200**). |
+| **`rate_plan_code`** / **`promotion_code`** | Collection (optional) | Empty by default. Set to match **GET …/availability** when testing **0014** pricing (e.g. DEMO **LOS3** with 3+ nights, **SAVE5**). |
+| **`search_hotel_ids`** | Collection (optional) | Comma-separated hotel UUIDs for **GET Search stays**; leave blank to search the whole chain. |
+| **`calendar_from`** / **`calendar_to`** | Collection | Half-open **`[from, to)`** for **GET Room type calendar** (defaults: one month in the collection). |
 
 ### 5. Get an M2M access token (example)
 
@@ -77,8 +80,10 @@ Copy **`access_token`** from the JSON into Postman **`access_token`**.
 
 1. **GET Health** — confirms `baseUrl`.
 2. **GET List hotels** — copy one hotel **`id`** → **`hotel_id`**. In Supabase (or metadata you keep), pick a **`room_type`** with that **`hotel_id`** → **`room_type_id`**.
-3. **POST Create reservation** — should return **201** (or **200** on replay). **`reservation_id`** is saved to the active environment when possible.
-4. **GET Reservation by id** — uses **`{{reservation_id}}`**.
+3. **GET Room type availability & quote** — optional **`rate_plan_code`** / **`promotion_code`** on the collection.
+4. **GET Search stays** / **GET Room type calendar** — after **0014**; calendar uses **`calendar_from`** / **`calendar_to`**.
+5. **POST Create reservation** — should return **201** (or **200** on replay). **`reservation_id`** is saved to the active environment when possible. Body includes the same optional codes as availability when testing priced bookings.
+6. **GET Reservation by id** — uses **`{{reservation_id}}`**.
 
 ---
 
@@ -96,7 +101,9 @@ Copy **`access_token`** from the JSON into Postman **`access_token`**.
 - **GET** `/v1/inventory/hotels` — Bearer token (tests may set `hotel_id` from first row).
 - **GET** `/v1/inventory/hotels/:id` — Bearer; e.g. `{{hotel_id}}`.
 - **GET** `/v1/inventory/hotels/:hotelId/room-types` — Bearer; e.g. `{{hotel_id}}` (tests may set `room_type_id`).
-- **GET** `/v1/inventory/hotels/:hotelId/room-types/:roomTypeId/availability?check_in=&check_out=` — Bearer; quote + per-night bookability (uses `{{hotel_id}}`, `{{room_type_id}}`, `{{check_in}}`, `{{check_out}}`).
+- **GET** `/v1/inventory/hotels/:hotelId/room-types/:roomTypeId/availability?check_in=&check_out=` — Bearer; quote + per-night bookability; optional `rate_plan_code`, `promotion_code` (uses `{{hotel_id}}`, `{{room_type_id}}`, `{{check_in}}`, `{{check_out}}`).
+- **GET** `/v1/inventory/search?check_in=&check_out=` — Bearer; optional `hotel_ids`, `sort`, `limit`, `rate_plan_code`, `promotion_code`.
+- **GET** `/v1/inventory/hotels/:hotelId/room-types/:roomTypeId/calendar?from=&to=` — Bearer; per-day occupancy / blocks (half-open range).
 - **GET** `/v1/reservations` — Bearer; optional `limit` / `offset` query params.
 - **POST** `/v1/reservations` — Bearer + `Idempotency-Key` + JSON body (see request description).
 - **GET** `/v1/reservations/:id` — Bearer; uses `{{reservation_id}}`.

@@ -1,6 +1,6 @@
 # Feature requirement status (tracker)
 
-Aligned with [`REQUIREMENTS.md`](REQUIREMENTS.md) **§2** backlog and [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) phases 0–4.
+Aligned with [`REQUIREMENTS.md`](REQUIREMENTS.md) **§2** backlog and [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) phases 0–5.
 
 | FR | Summary | Status |
 |----|---------|--------|
@@ -19,7 +19,9 @@ Aligned with [`REQUIREMENTS.md`](REQUIREMENTS.md) **§2** backlog and [`IMPLEMEN
 | FR-V4 | Booking policies | **`inventory.hotel`**: **`booking_min_los`**, **`booking_max_los`**, CTA/CTD weekday arrays (**0=Sun..6=Sat** in hotel TZ), **`booking_timezone`**, **`booking_same_day_cutoff_time`**. Enforced in quote + create; search skips non-complying hotels. |
 | FR-V1 | Multi-hotel search | **`GET /v1/inventory/search`** — RPC **`inventory_search_stays`** (`hotel_ids`, `sort`, `limit`, optional rate/promo codes). |
 | FR-V2 | Calendar API | **`GET /v1/inventory/hotels/{hotelId}/room-types/{roomTypeId}/calendar`** — RPC **`room_type_availability_calendar`** (`from`, `to` half-open). |
+| FR-V5 | Soft holds (TTL) | **`POST …/room-types/{roomTypeId}/soft-holds`**, **`DELETE /v1/inventory/soft-holds/{holdId}`** — RPCs **`create_soft_hold`** / **`release_soft_hold`**; quote/calendar/search/create count active holds (**0015**). |
+| FR-R11 | PATCH concurrency | **`reservation_stub.row_version`**; **GET** / **POST** create echo weak **`ETag`** derived from version; **PATCH** status / guest accept optional **`If-Match`** → **412** on mismatch (**0015**). |
 
-**Migrations:** apply through [`0014_phase3_phase4_rate_plans_search_policies.sql`](../supabase/migrations/0014_phase3_phase4_rate_plans_search_policies.sql).
+**Migrations:** apply through [`0015_soft_holds_and_reservation_etags.sql`](../supabase/migrations/0015_soft_holds_and_reservation_etags.sql).
 
 **Demo seed (0014):** chain **`DEMO`** — rate plan **`LOS3`** (3+ night tier **9000** cents/night on **DEMO-H1** `STD-QN` when BAR is higher); promotion **`SAVE5`** (500 bps off).

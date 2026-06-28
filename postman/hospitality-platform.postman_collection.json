@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "a1b2c3d4-hosp-0001-gateway",
     "name": "Hospitality Platform — Gateway API",
-    "description": "Calls the **gateway** only (inventory + reservations).\n\n**Setup:** import the example environment, set `baseUrl` and `access_token` (Auth0 access token with your API `aud` and claim `https://hospitality.app/claims/chain_id`). Run **GET List hotels** then **GET Room types** so **collection** variables `hotel_id` / `room_type_id` fill in (or set them manually on the collection).\n\n**Variables:** Postman resolves **environment** before **collection** for the same name. Empty strings in the environment **override** collection values — the example env only defines `baseUrl`, `access_token`, `check_in`, and `check_out` so ids from tests are not shadowed. To pin `hotel_id` in the environment, add the key with a **real UUID** (never an empty placeholder).\n\n**Conventions:** folders group by domain; auth is inherited (Bearer on protected folders). Health uses `noauth`.",
+    "description": "Calls the **gateway** only (inventory + reservations).\n\n**Setup:** import the example environment, set `baseUrl` and `access_token` (Auth0 access token with your API `aud` and claim `https://hospitality.app/claims/chain_id`). Run **GET List hotels** then **GET Room types** so **collection** variables `hotel_id` / `room_type_id` fill in (or set them manually on the collection).\n\n**Phase 4 inventory:** **GET Search stays** (`/v1/inventory/search`), **GET Room type calendar** (`…/calendar?from=&to=`). Optional **`rate_plan_code`** / **`promotion_code`** on availability, search, and **POST Create** (migration **0014**; DEMO seed: **LOS3** for 3+ nights, **SAVE5** for 5% off).\n\n**Phase 5:** **POST Create soft hold** / **DELETE Release soft hold** (migration **0015**); **GET Reservation** saves **`reservation_etag`** for optional **`If-Match`** on **PATCH** (**412** if stale).\n\n**Variables:** Postman resolves **environment** before **collection** for the same name. Empty strings in the environment **override** collection values — the example env only defines `baseUrl`, `access_token`, `check_in`, and `check_out` so ids from tests are not shadowed. To pin `hotel_id` in the environment, add the key with a **real UUID** (never an empty placeholder).\n\n**Conventions:** folders group by domain; auth is inherited (Bearer on protected folders). Health uses `noauth`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -37,6 +37,41 @@
     {
       "key": "idempotency_key",
       "value": ""
+    },
+    {
+      "key": "rate_plan_code",
+      "value": "",
+      "description": "Optional; e.g. DEMO **LOS3** (use with3+ nights). Empty = omit meaningfully in query/body."
+    },
+    {
+      "key": "promotion_code",
+      "value": "",
+      "description": "Optional; e.g. DEMO **SAVE5**. Empty = BAR / no promo."
+    },
+    {
+      "key": "search_hotel_ids",
+      "value": "",
+      "description": "Optional comma-separated hotel UUIDs for **GET Search stays**. Leave blank to search all hotels in the chain."
+    },
+    {
+      "key": "calendar_from",
+      "value": "2026-06-01",
+      "description": "Half-open range start for **GET Room type calendar** (YYYY-MM-DD)."
+    },
+    {
+      "key": "calendar_to",
+      "value": "2026-07-01",
+      "description": "Half-open range end (exclusive) for calendar."
+    },
+    {
+      "key": "soft_hold_id",
+      "value": "",
+      "description": "Set by **POST Create soft hold** test script (migration **0015**)."
+    },
+    {
+      "key": "reservation_etag",
+      "value": "",
+      "description": "Weak ETag from **GET Reservation** / **POST Create**; optional **If-Match** on PATCH (**FR-R11**)."
     }
   ],
   "item": [
@@ -147,8 +182,77 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{baseUrl}}/v1/inventory/hotels/{{hotel_id}}/room-types/{{room_type_id}}/availability?check_in={{check_in}}&check_out={{check_out}}",
-            "description": "Per-night **bookable** + **pricing** (`tax_rate_bps`, `fee_fixed_cents`). Query dates must match **POST /v1/reservations** window. Requires Supabase migration **0012**."
+            "url": "{{baseUrl}}/v1/inventory/hotels/{{hotel_id}}/room-types/{{room_type_id}}/availability?check_in={{check_in}}&check_out={{check_out}}&rate_plan_code={{rate_plan_code}}&promotion_code={{promotion_code}}",
+            "description": "Per-night **bookable** + **pricing** (rate plans, optional promotions, **inventory blocks**, hotel **booking policies**). Optional query **`rate_plan_code`** / **`promotion_code`** (collection vars; leave empty to skip). Dates should match **POST /v1/reservations**. Requires migration **0014**."
+          },
+          "response": []
+        },
+        {
+          "name": "GET Search stays",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/inventory/search?check_in={{check_in}}&check_out={{check_out}}&sort=price&limit=20&hotel_ids={{search_hotel_ids}}&rate_plan_code={{rate_plan_code}}&promotion_code={{promotion_code}}",
+            "description": "**FR-V1:** all room types in the chain (optionally filter **`hotel_ids`** = comma-separated UUIDs in **`search_hotel_ids`**). Hotels that fail policy checks for the stay are omitted. **`sort`**: `price` (here) or change URL to `sort=bookable`. Optional **`rate_plan_code`** / **`promotion_code`**."
+          },
+          "response": []
+        },
+        {
+          "name": "GET Room type calendar",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/inventory/hotels/{{hotel_id}}/room-types/{{room_type_id}}/calendar?from={{calendar_from}}&to={{calendar_to}}",
+            "description": "**FR-V2:** per-day **occupancy**, **soft_hold_units**, **units_blocked**, **remaining_units**, **bookable** on half-open **[from, to)**. Set **`calendar_from`** / **`calendar_to`** on the collection (e.g. one month). **0015** adds **soft holds** to counts."
+          },
+          "response": []
+        },
+        {
+          "name": "POST Create soft hold",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const j = pm.response.json();",
+                  "    const id = j && j.soft_hold && j.soft_hold.hold_id;",
+                  "    if (id) {",
+                  "        pm.collectionVariables.set('soft_hold_id', id);",
+                  "        if (pm.environment.name) {",
+                  "            pm.environment.set('soft_hold_id', id);",
+                  "        }",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"check_in\": \"{{check_in}}\",\n  \"check_out\": \"{{check_out}}\",\n  \"ttl_seconds\": 900,\n  \"units_held\": 1\n}"
+            },
+            "url": "{{baseUrl}}/v1/inventory/hotels/{{hotel_id}}/room-types/{{room_type_id}}/soft-holds",
+            "description": "**FR-V5:** temporary capacity lock (**60**–**86400** s TTL). Re-run **GET …/availability** to see **`max_night_including_holds`** / **`bookable`**. Saves **`soft_hold_id`** on **200**."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE Release soft hold",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/v1/inventory/soft-holds/{{soft_hold_id}}",
+            "description": "Removes hold for this chain. Set **`soft_hold_id`** from **POST Create soft hold**."
           },
           "response": []
         }
@@ -216,6 +320,13 @@
                   "            pm.environment.set('reservation_id', id);",
                   "        }",
                   "    }",
+                  "    const etag = pm.response.headers.get('ETag');",
+                  "    if (etag) {",
+                  "        pm.collectionVariables.set('reservation_etag', etag);",
+                  "        if (pm.environment.name) {",
+                  "            pm.environment.set('reservation_etag', etag);",
+                  "        }",
+                  "    }",
                   "}",
                   "pm.test('Status is 200 or 201', function () {",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
@@ -240,31 +351,74 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"hotel_id\": \"{{hotel_id}}\",\n  \"room_type_id\": \"{{room_type_id}}\",\n  \"check_in\": \"{{check_in}}\",\n  \"check_out\": \"{{check_out}}\",\n  \"guest\": {\n    \"first_name\": \"Ada\",\n    \"last_name\": \"Lovelace\",\n    \"email\": \"ada@example.com\",\n    \"phone\": \"+1-555-0100\"\n  }\n}"
+              "raw": "{\n  \"hotel_id\": \"{{hotel_id}}\",\n  \"room_type_id\": \"{{room_type_id}}\",\n  \"check_in\": \"{{check_in}}\",\n  \"check_out\": \"{{check_out}}\",\n  \"rate_plan_code\": \"{{rate_plan_code}}\",\n  \"promotion_code\": \"{{promotion_code}}\",\n  \"guest\": {\n    \"first_name\": \"Ada\",\n    \"last_name\": \"Lovelace\",\n    \"email\": \"ada@example.com\",\n    \"phone\": \"+1-555-0100\"\n  }\n}"
             },
             "url": "{{baseUrl}}/v1/reservations",
-            "description": "First send sets **`reservation_id`** on the **collection** (use **Collection** → **Variables** to inspect). For a **new** booking, clear **`idempotency_key`**; pre-request fills a new GUID on the collection when resolved value is blank. Re-send **without** clearing to test replay (**200** + `idempotent_replay: true`). After **`0011`**, **400** if overlapping **pending**/**confirmed** bookings meet **`room_type.units_total`** for **[check_in, check_out)**."
+            "description": "First send sets **`reservation_id`** on the **collection** (use **Collection** → **Variables** to inspect). For a **new** booking, clear **`idempotency_key`**; pre-request fills a new GUID on the collection when resolved value is blank. Re-send **without** clearing to test replay (**200** + `idempotent_replay: true`). Optional **`rate_plan_code`** / **`promotion_code`** must match **GET …/availability** for the same stay (or omit / leave collection vars empty). Pricing snapshot + **`expected_total_cents`** parity: migration **0013**+."
           },
           "response": []
         },
         {
           "name": "GET Reservation by id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const etag = pm.response.headers.get('ETag');",
+                  "    if (etag) {",
+                  "        pm.collectionVariables.set('reservation_etag', etag);",
+                  "        if (pm.environment.name) {",
+                  "            pm.environment.set('reservation_etag', etag);",
+                  "        }",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/v1/reservations/{{reservation_id}}",
-            "description": "Uses `{{reservation_id}}` (Postman: **environment** overrides **collection** for the same name). Saved to **collection** by **POST Create reservation**; set manually on the collection or in the environment if needed."
+            "description": "Uses `{{reservation_id}}` (Postman: **environment** overrides **collection** for the same name). Saves **`reservation_etag`** from **`ETag`** for optional **PATCH** concurrency (**FR-R11**)."
           },
           "response": []
         },
         {
           "name": "PATCH Guest contact",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const etag = pm.response.headers.get('ETag');",
+                  "    if (etag) {",
+                  "        pm.collectionVariables.set('reservation_etag', etag);",
+                  "        if (pm.environment.name) {",
+                  "            pm.environment.set('reservation_etag', etag);",
+                  "        }",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "PATCH",
             "header": [
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "{{reservation_etag}}",
+                "description": "Optional; from **GET Reservation** / **POST Create**. Omit by clearing **`reservation_etag`** or disable header."
               }
             ],
             "body": {
@@ -272,18 +426,42 @@
               "raw": "{\n  \"email\": \"ada.updated@example.com\",\n  \"phone\": \"+1-555-0199\"\n}"
             },
             "url": "{{baseUrl}}/v1/reservations/{{reservation_id}}/guest",
-            "description": "At least one of `first_name`, `last_name`, `email`, `phone`. Set `\"phone\": null` to clear phone."
+            "description": "At least one of `first_name`, `last_name`, `email`, `phone`. Set `\"phone\": null` to clear phone. Optional **`If-Match`** (**412** if stale)."
           },
           "response": []
         },
         {
           "name": "PATCH Confirm reservation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const etag = pm.response.headers.get('ETag');",
+                  "    if (etag) {",
+                  "        pm.collectionVariables.set('reservation_etag', etag);",
+                  "        if (pm.environment.name) {",
+                  "            pm.environment.set('reservation_etag', etag);",
+                  "        }",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "PATCH",
             "header": [
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "{{reservation_etag}}",
+                "description": "Optional weak ETag for optimistic concurrency."
               }
             ],
             "body": {
@@ -297,12 +475,36 @@
         },
         {
           "name": "PATCH Cancel reservation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const etag = pm.response.headers.get('ETag');",
+                  "    if (etag) {",
+                  "        pm.collectionVariables.set('reservation_etag', etag);",
+                  "        if (pm.environment.name) {",
+                  "            pm.environment.set('reservation_etag', etag);",
+                  "        }",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "PATCH",
             "header": [
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "{{reservation_etag}}",
+                "description": "Optional weak ETag for optimistic concurrency."
               }
             ],
             "body": {

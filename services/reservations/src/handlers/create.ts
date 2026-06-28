@@ -1,5 +1,6 @@
 import type { Context } from "hono";
 import type { Env, RpcResult } from "../types";
+import { normalizeRowVersion, weakEtag } from "../etag";
 import { problem } from "../problem";
 import { RESERVATION_DETAIL_SELECT } from "../selects";
 import { supaClient } from "../supabase";
@@ -100,7 +101,10 @@ export async function createReservation(c: Context<{ Bindings: Env }>) {
     return problem(500, "Database error", "Reservation not found after create");
   }
   const status = row.created ? 201 : 200;
-  return c.json(
+  const rv = normalizeRowVersion(
+    (full as { row_version?: unknown }).row_version
+  );
+  const res = c.json(
     {
       reservation: full,
       idempotency_key: idem.trim(),
@@ -108,4 +112,8 @@ export async function createReservation(c: Context<{ Bindings: Env }>) {
     },
     status
   );
+  if (rv !== null) {
+    res.headers.set("ETag", weakEtag(rv));
+  }
+  return res;
 }

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { parseAvailabilityQuery } from "../services/inventory/src/validation.ts";
+import {
+  parseAvailabilityQuery,
+  parseSoftHoldCreateBody,
+} from "../services/inventory/src/validation.ts";
 
 function mockQuery(params: Record<string, string>) {
   return {
@@ -32,6 +35,29 @@ describe("parseAvailabilityQuery", () => {
     const r = parseAvailabilityQuery(
       mockQuery({ check_in: "2026-06-04", check_out: "2026-06-01" })
     );
+    expect(r.ok).toBe(false);
+  });
+});
+
+describe("parseSoftHoldCreateBody", () => {
+  it("accepts check_in and check_out with defaults", () => {
+    const r = parseSoftHoldCreateBody({
+      check_in: "2026-06-01",
+      check_out: "2026-06-04",
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.body.ttl_seconds).toBe(900);
+      expect(r.body.units_held).toBe(1);
+    }
+  });
+
+  it("rejects ttl_seconds out of range", () => {
+    const r = parseSoftHoldCreateBody({
+      check_in: "2026-06-01",
+      check_out: "2026-06-04",
+      ttl_seconds: 30,
+    });
     expect(r.ok).toBe(false);
   });
 });

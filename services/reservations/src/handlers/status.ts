@@ -1,5 +1,6 @@
 import type { Context } from "hono";
 import type { Env } from "../types";
+import { ifMatchPreconditionResponse, normalizeRowVersion, weakEtag } from "../etag";
 import { problem } from "../problem";
 import { RESERVATION_DETAIL_SELECT } from "../selects";
 import { supaClient } from "../supabase";
@@ -35,7 +36,7 @@ export async function patchReservationStatus(c: Context<{ Bindings: Env }>) {
   const { data: row, error: rowErr } = await supa
     .schema("reservations")
     .from("reservation_stub")
-    .select("id, status")
+    .select("id, status, row_version")
     .eq("id", id.trim())
     .eq("chain_id", chainId)
     .maybeSingle();
@@ -44,6 +45,17 @@ export async function patchReservationStatus(c: Context<{ Bindings: Env }>) {
   }
   if (!row) {
     return problem(404, "Not Found", "Reservation not found for this chain");
+  }
+  const rowVersion = normalizeRowVersion(row.row_version);
+  if (rowVersion === null) {
+    return problem(500, "Database error", "Missing row_version");
+  }
+  const pre = ifMatchPreconditionResponse(
+    rowVersion,
+    c.req.header("If-Match") ?? c.req.header("if-match")
+  );
+  if (pre) {
+    return pre;
   }
   const transition = canTransitionTo(row.status, nextStatus);
   if (transition === "forbidden") {
@@ -67,7 +79,14 @@ export async function patchReservationStatus(c: Context<{ Bindings: Env }>) {
     if (!full) {
       return problem(404, "Not Found", "Reservation not found for this chain");
     }
-    return c.json({ reservation: full });
+    const rv = normalizeRowVersion(
+      (full as { row_version?: unknown }).row_version
+    );
+    const res = c.json({ reservation: full });
+    if (rv !== null) {
+      res.headers.set("ETag", weakEtag(rv));
+    }
+    return res;
   }
   const now = new Date().toISOString();
   const { error: upErr } = await supa
@@ -92,5 +111,12 @@ export async function patchReservationStatus(c: Context<{ Bindings: Env }>) {
   if (!full) {
     return problem(404, "Not Found", "Reservation not found for this chain");
   }
-  return c.json({ reservation: full });
+  const rv2 = normalizeRowVersion(
+    (full as { row_version?: unknown }).row_version
+  );
+  const out = c.json({ reservation: full });
+  if (rv2 !== null) {
+    out.headers.set("ETag", weakEtag(rv2));
+  }
+  return out;
 }

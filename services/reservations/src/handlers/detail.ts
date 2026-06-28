@@ -1,5 +1,6 @@
 import type { Context } from "hono";
 import type { Env } from "../types";
+import { normalizeRowVersion, weakEtag } from "../etag";
 import { problem } from "../problem";
 import { RESERVATION_DETAIL_SELECT } from "../selects";
 import { supaClient } from "../supabase";
@@ -30,5 +31,12 @@ export async function getReservation(c: Context<{ Bindings: Env }>) {
   if (!data) {
     return problem(404, "Not Found", "Reservation not found for this chain");
   }
-  return c.json({ reservation: data });
+  const rv = normalizeRowVersion(
+    (data as { row_version?: unknown }).row_version
+  );
+  const res = c.json({ reservation: data });
+  if (rv !== null) {
+    res.headers.set("ETag", weakEtag(rv));
+  }
+  return res;
 }

@@ -155,3 +155,4 @@ This is a **phased** plan: later phases depend on data model and API decisions f
 | 2026-04-12 | Initial phased plan for REQUIREMENTS §2. |
 | 2026-04-12 | Backlog coverage table: every §2 FR mapped to a phase. |
 | 2026-04-07 | Phases **3–4** implemented in migration **0014** + gateway/inventory/reservations: rate plans, LOS tiers, promotions, blocks, policies, **GET /v1/inventory/search**, **GET …/calendar**; quote/create accept **`rate_plan_code`** / **`promotion_code`**. |
+| 2026-04-07 | Phase **5**: migration **0015** (soft holds + **`row_version`**); inventory soft-hold HTTP routes; reservations **ETag** / **If-Match** on GET + PATCH. |

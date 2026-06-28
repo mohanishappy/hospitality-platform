@@ -1,5 +1,6 @@
 import type { Context } from "hono";
 import type { Env } from "../types";
+import { ifMatchPreconditionResponse, normalizeRowVersion, weakEtag } from "../etag";
 import { problem } from "../problem";
 import { RESERVATION_DETAIL_SELECT } from "../selects";
 import { supaClient } from "../supabase";
@@ -31,7 +32,7 @@ export async function patchGuest(c: Context<{ Bindings: Env }>) {
   const { data: resRow, error: resErr } = await supa
     .schema("reservations")
     .from("reservation_stub")
-    .select("id")
+    .select("id, row_version")
     .eq("id", id.trim())
     .eq("chain_id", chainId)
     .maybeSingle();
@@ -40,6 +41,17 @@ export async function patchGuest(c: Context<{ Bindings: Env }>) {
   }
   if (!resRow) {
     return problem(404, "Not Found", "Reservation not found for this chain");
+  }
+  const rowVersion = normalizeRowVersion(resRow.row_version);
+  if (rowVersion === null) {
+    return problem(500, "Database error", "Missing row_version");
+  }
+  const pre = ifMatchPreconditionResponse(
+    rowVersion,
+    c.req.header("If-Match") ?? c.req.header("if-match")
+  );
+  if (pre) {
+    return pre;
   }
   const { data: guestRow, error: gErr } = await supa
     .schema("reservations")
@@ -92,5 +104,12 @@ export async function patchGuest(c: Context<{ Bindings: Env }>) {
   if (!full) {
     return problem(404, "Not Found", "Reservation not found for this chain");
   }
-  return c.json({ reservation: full });
+  const rv = normalizeRowVersion(
+    (full as { row_version?: unknown }).row_version
+  );
+  const out = c.json({ reservation: full });
+  if (rv !== null) {
+    out.headers.set("ETag", weakEtag(rv));
+  }
+  return out;
 }

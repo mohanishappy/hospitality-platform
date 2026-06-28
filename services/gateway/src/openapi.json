@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Hospitality Platform API",
-    "description": "Gateway surface for **inventory** (hotels, room types) and **reservations**. Send requests to the gateway URL; it validates **Auth0** JWTs and forwards to backing Workers (injects `x-chain-id` from the token).\n\n**Token:** Bearer access token with `aud` = your API identifier and a tenant claim: claim key **`https://hospitality.app/claims/chain_id`** (string UUID), or **`chain_id`** — must match an `inventory.chain` row.\n\n**Errors:** JSON **`application/problem+json`** with `type`, `title`, `detail`, `status` (see schema **Problem**).",
+    "description": "Gateway surface for **inventory** (hotels, room types) and **reservations**. Send requests to the gateway URL; it validates **Auth0** JWTs and forwards to backing Workers (injects `x-chain-id` from the token).\n\n**Token:** Bearer access token with `aud` = your API identifier and a tenant claim: claim key **`https://hospitality.app/claims/chain_id`** (string UUID), or **`chain_id`** — must match an `inventory.chain` row.\n\n**Phase 5:** **soft holds** (TTL) reduce availability until released or expired (**migration 0015**). Reservation **GET** returns **`ETag`** (`W/\"row_version\"`); **PATCH** accepts optional **`If-Match`** for optimistic concurrency (**412** on mismatch).\n\n**Errors:** JSON **`application/problem+json`** with `type`, `title`, `detail`, `status` (see schema **Problem**).",
     "version": "1.0.0",
     "contact": { "name": "Hospitality Platform" }
   },
@@ -344,7 +344,7 @@
       "get": {
         "tags": ["Inventory"],
         "summary": "Availability and price quote for a stay",
-        "description": "Per-**night** capacity: sellable units = **`units_total` + `overbooking_allowance` − inventory blocks**. A stay is bookable when **every** night in **[check_in, check_out)** has remaining capacity. **Pricing** resolves **rate plans** (LOS tiers) and optional **promotions**, then **tax** and **fees** (see migration **0014**).",
+        "description": "Per-**night** capacity: sellable units = **`units_total` + `overbooking_allowance` − inventory blocks**. **Active soft holds** (not expired) count toward nightly use. A stay is bookable when **every** night in **[check_in, check_out)** has remaining capacity. **Pricing** resolves **rate plans** (LOS tiers) and optional **promotions**, then **tax** and **fees** (migrations **0014**–**0015**).",
         "operationId": "getRoomTypeAvailability",
         "security": [{ "bearerAuth": [] }],
         "parameters": [
@@ -406,6 +406,95 @@
           },
           "400": { "$ref": "#/components/responses/Problem" },
           "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/v1/inventory/hotels/{hotelId}/room-types/{roomTypeId}/soft-holds": {
+      "post": {
+        "tags": ["Inventory"],
+        "summary": "Create soft hold (TTL)",
+        "description": "Reserves **units_held** on **[check_in, check_out)** until **expires_at** (now + **ttl_seconds**, 60–86400). Counts toward availability in quote, calendar, search, and create until released or expired. Requires migration **0015**.",
+        "operationId": "createSoftHold",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "hotelId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "roomTypeId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SoftHoldCreateRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Hold created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["soft_hold"],
+                  "properties": {
+                    "soft_hold": { "$ref": "#/components/schemas/SoftHoldResult" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Problem" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/v1/inventory/soft-holds/{holdId}": {
+      "delete": {
+        "tags": ["Inventory"],
+        "summary": "Release soft hold",
+        "description": "Deletes the hold if it belongs to the caller's chain. Idempotent from a capacity perspective once expired (row may already be gone).",
+        "operationId": "releaseSoftHold",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "holdId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Released",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["result"],
+                  "properties": {
+                    "result": {
+                      "type": "object",
+                      "properties": { "released": { "type": "boolean", "example": true } }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/Problem" },
           "500": { "$ref": "#/components/responses/Problem" }
         }
       }
@@ -551,7 +640,13 @@
         ],
         "responses": {
           "200": {
-            "description": "Includes nested **guest**",
+            "description": "Includes nested **guest**. Response **`ETag`** is **`W/\"{row_version}\"`** for optimistic concurrency.",
+            "headers": {
+              "ETag": {
+                "schema": { "type": "string" },
+                "description": "Weak entity tag from **row_version**."
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -572,7 +667,7 @@
       "patch": {
         "tags": ["Reservations"],
         "summary": "Update reservation status",
-        "description": "Lifecycle: **pending** → **confirmed** | **cancelled**; **confirmed** → **cancelled**. Same status is a no-op.**409** if transition invalid.",
+        "description": "Lifecycle: **pending** → **confirmed** | **cancelled**; **confirmed** → **cancelled**. Same status is a no-op. Optional **`If-Match`** with the **`ETag`** from **GET** (or **POST** create); **412** when the header does not match **`row_version`**. **409** if transition invalid.",
         "operationId": "patchReservationStatus",
         "security": [{ "bearerAuth": [] }],
         "parameters": [
@@ -581,6 +676,13 @@
             "in": "path",
             "required": true,
             "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "Optional weak ETag e.g. **`W/\"3\"`** matching current **`row_version`**."
           }
         ],
         "requestBody": {
@@ -609,6 +711,7 @@
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "404": { "$ref": "#/components/responses/Problem" },
           "409": { "$ref": "#/components/responses/Problem" },
+          "412": { "$ref": "#/components/responses/PreconditionFailed" },
           "500": { "$ref": "#/components/responses/Problem" }
         }
       }
@@ -617,7 +720,7 @@
       "patch": {
         "tags": ["Reservations"],
         "summary": "Patch guest contact fields",
-        "description": "At least one of **first_name**, **last_name**, **email**, **phone**. Use **`null`** for **phone** to clear.",
+        "description": "At least one of **first_name**, **last_name**, **email**, **phone**. Use **`null`** for **phone** to clear. Optional **`If-Match`** (**412** on **`row_version`** mismatch).",
         "operationId": "patchGuest",
         "security": [{ "bearerAuth": [] }],
         "parameters": [
@@ -627,6 +730,13 @@
             "required": true,
             "description": "Reservation id",
             "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "Optional weak ETag from **GET** / **POST** create."
           }
         ],
         "requestBody": {
@@ -655,6 +765,7 @@
           "400": { "$ref": "#/components/responses/Problem" },
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "404": { "$ref": "#/components/responses/Problem" },
+          "412": { "$ref": "#/components/responses/PreconditionFailed" },
           "500": { "$ref": "#/components/responses/Problem" }
         }
       }
@@ -731,6 +842,10 @@
           "overbooking_allowance": { "type": "integer" },
           "sellable_capacity": { "type": "integer" },
           "max_night_occupancy": { "type": "integer" },
+          "max_night_including_holds": {
+            "type": "integer",
+            "description": "Peak nightly reservations + soft holds (migration **0015**)"
+          },
           "remaining_units_on_tightest_night": { "type": "integer" },
           "bookable": { "type": "boolean" },
           "pricing": { "$ref": "#/components/schemas/StayPricingQuote" }
@@ -776,6 +891,7 @@
         "properties": {
           "date": { "type": "string", "format": "date" },
           "occupancy": { "type": "integer" },
+          "soft_hold_units": { "type": "integer", "description": "Active holds overlapping this night" },
           "units_blocked": { "type": "integer" },
           "sellable_capacity": { "type": "integer" },
           "remaining_units": { "type": "integer" },
@@ -819,10 +935,38 @@
           },
           "created_at": { "type": "string", "format": "date-time" },
           "updated_at": { "type": "string", "format": "date-time" },
+          "row_version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Increments on reservation updates; used for **ETag** / **If-Match**"
+          },
           "pricing_snapshot": {
             "nullable": true,
             "allOf": [{ "$ref": "#/components/schemas/PricingSnapshot" }]
           }
+        }
+      },
+      "SoftHoldCreateRequest": {
+        "type": "object",
+        "required": ["check_in", "check_out"],
+        "properties": {
+          "check_in": { "type": "string", "format": "date" },
+          "check_out": { "type": "string", "format": "date" },
+          "ttl_seconds": {
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 86400,
+            "default": 900,
+            "description": "Hold lifetime in seconds"
+          },
+          "units_held": { "type": "integer", "minimum": 1, "default": 1 }
+        }
+      },
+      "SoftHoldResult": {
+        "type": "object",
+        "properties": {
+          "hold_id": { "type": "string", "format": "uuid" },
+          "expires_at": { "type": "string", "format": "date-time" }
         }
       },
       "Guest": {
@@ -928,6 +1072,14 @@
       },
       "Problem": {
         "description": "Error (validation, not found, conflict, server)",
+        "content": {
+          "application/problem+json": {
+            "schema": { "$ref": "#/components/schemas/Problem" }
+          }
+        }
+      },
+      "PreconditionFailed": {
+        "description": "**If-Match** did not match **row_version**",
         "content": {
           "application/problem+json": {
             "schema": { "$ref": "#/components/schemas/Problem" }

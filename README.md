@@ -116,7 +116,7 @@ You can re-run a deploy from the **Actions** tab (**Run workflow**) without push
 
 ## Postman
 
-Import **`postman/hospitality-platform.postman_collection.json`**, create a **local** env (copy the example to `postman/hospitality-platform.local.postman_environment.json` — gitignored — see [**Local environment setup**](postman/README.md#local-environment-setup)), then set **`baseUrl`** and **`access_token`** in the **environment** (they override empty collection values). **`hotel_id`**, **`room_type_id`**, **`reservation_id`**, and **`idempotency_key`** live on the **collection** by default (or in the env only when set to real values — never `""`). Full guide: [`postman/README.md`](postman/README.md).
+Import **`postman/hospitality-platform.postman_collection.json`**, create a **local** env (copy the example to `postman/hospitality-platform.local.postman_environment.json` — gitignored — see [**Local environment setup**](postman/README.md#local-environment-setup)), then set **`baseUrl`** and **`access_token`** in the **environment** (they override empty collection values). **`hotel_id`**, **`room_type_id`**, **`reservation_id`**, **`idempotency_key`**, optional **`rate_plan_code`** / **`promotion_code`**, **`search_hotel_ids`**, and **`calendar_from`** / **`calendar_to`** live on the **collection** by default (or in the env only when set to real values — never `""`). Full guide: [`postman/README.md`](postman/README.md).
 
 Responses include **`x-request-id`** for correlation; send the same header to trace a request end-to-end.
 

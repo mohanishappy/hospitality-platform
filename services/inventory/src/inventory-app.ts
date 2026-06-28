@@ -6,10 +6,16 @@ import { getHotel } from "./handlers/hotel-detail";
 import { listHotels } from "./handlers/hotels";
 import { listRoomTypes } from "./handlers/room-types";
 import { searchStays } from "./handlers/search";
+import { createSoftHold, releaseSoftHold } from "./handlers/soft-holds";
 
 export function inventoryApp() {
   const r = new Hono<{ Bindings: Env }>();
   r.get("/search", searchStays);
+  r.delete("/soft-holds/:holdId", releaseSoftHold);
+  r.post(
+    "/hotels/:hotelId/room-types/:roomTypeId/soft-holds",
+    createSoftHold
+  );
   r.get("/hotels", listHotels);
   r.get(
     "/hotels/:hotelId/room-types/:roomTypeId/calendar",
