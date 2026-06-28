@@ -12,6 +12,7 @@ import {
 } from "../hooks/useAccessClaims";
 import { useAuthReady } from "../hooks/useGatewayToken";
 import { useTenantPath } from "../hooks/useChainPath";
+import { formatRolesLabel } from "../lib/claims";
 import {
   enterpriseAdminPath,
   enterprisePath,
@@ -20,6 +21,7 @@ import {
 import { AuthBar } from "./AuthBar";
 import { AdminBrandsTab } from "./admin/AdminBrandsTab";
 import { AdminStaffTab } from "./admin/AdminStaffTab";
+import { PanelErrorBoundary } from "./ErrorBoundary";
 import { SiteFooter } from "./SiteFooter";
 
 type Props = {
@@ -41,9 +43,14 @@ function AdminShell({
   enterpriseName,
   chains,
 }: Props & { enterpriseName: string; chains: ChainSummary[] }) {
-  const { isAuthenticated, isLoading: authLoading } = useAuth0();
+  const { isAuthenticated, isLoading: authLoading, user } = useAuth0();
   const { ready } = useAuthReady();
-  const { isManager, enterpriseId, loading: claimsLoading } = useAccessClaims();
+  const {
+    isManager,
+    enterpriseId,
+    roles,
+    loading: claimsLoading,
+  } = useAccessClaims();
   const { navigateToEnterpriseAdmin } = useTenantPath();
 
   const loading = authLoading || (isAuthenticated && ready && claimsLoading);
@@ -93,6 +100,27 @@ function AdminShell({
             <p className="error">
               Your account does not have the manager role for this enterprise.
             </p>
+            <dl className="quote-breakdown">
+              <div>
+                <dt>Signed in as</dt>
+                <dd>{user?.email ?? "—"}</dd>
+              </div>
+              <div>
+                <dt>Token roles</dt>
+                <dd>{formatRolesLabel(roles)}</dd>
+              </div>
+              <div>
+                <dt>Enterprise scope</dt>
+                <dd>{enterpriseId ?? "none"}</dd>
+              </div>
+            </dl>
+            <p className="muted">
+              After 9B, roles come from <code>inventory.staff_member</code> via
+              the Auth0 Post Login Action — not from the email address alone.
+              Confirm the 9B Action is deployed,{" "}
+              <code>ACTION_CLAIMS_SECRET</code> matches on gateway + inventory +
+              Auth0, then <strong>sign out and sign in again</strong>.
+            </p>
             <p className="muted">
               <a href={enterprisePath(enterpriseCode)}>← Back to {enterpriseName}</a>
             </p>
@@ -111,11 +139,13 @@ function AdminShell({
         {!loading && isAuthenticated && isManager && enterpriseId && (
           <>
             {tab === "staff" && (
-              <AdminStaffTab
-                gatewayUrl={config.gatewayUrl}
-                audience={config.auth0Audience}
-                chains={chains}
-              />
+              <PanelErrorBoundary title="Staff admin">
+                <AdminStaffTab
+                  gatewayUrl={config.gatewayUrl}
+                  audience={config.auth0Audience}
+                  chains={chains}
+                />
+              </PanelErrorBoundary>
             )}
             {tab === "brands" && <AdminBrandsTab chains={chains} />}
             {tab === "properties" && (

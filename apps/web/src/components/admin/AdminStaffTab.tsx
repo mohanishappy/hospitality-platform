@@ -27,6 +27,10 @@ function chainLabel(id: string, chains: ChainSummary[]): string {
   return chain ? `${chain.name} (${chain.code})` : id.slice(0, 8);
 }
 
+function formatIntendedRole(role: string | null | undefined): string {
+  return (role ?? "front_desk").replace(/_/g, " ");
+}
+
 export function AdminStaffTab({ gatewayUrl, audience, chains }: Props) {
   const getToken = useGatewayToken(audience);
   const [staff, setStaff] = useState<StaffMember[]>([]);
@@ -257,8 +261,8 @@ export function AdminStaffTab({ gatewayUrl, audience, chains }: Props) {
                 <div className="staff-row-main">
                   <strong>{member.email}</strong>
                   <span className="staff-meta">
-                    {member.intended_role.replace(/_/g, " ")} ·{" "}
-                    {member.status}
+                    {formatIntendedRole(member.intended_role)} ·{" "}
+                    {member.status ?? "active"}
                     {member.status === "active" &&
                       (member.active ? "" : " (disabled)")}
                   </span>

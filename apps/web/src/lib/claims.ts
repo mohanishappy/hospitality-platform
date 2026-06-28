@@ -2,9 +2,13 @@ const ROLES_CLAIM = "https://hospitality.app/claims/roles";
 
 export function decodeJwtPayload(token: string): Record<string, unknown> {
   const part = token.split(".")[1];
-  if (!part) return {};
-  const json = atob(part.replace(/-/g, "+").replace(/_/g, "/"));
-  return JSON.parse(json) as Record<string, unknown>;
+  if (!part?.trim()) return {};
+  try {
+    const json = atob(part.replace(/-/g, "+").replace(/_/g, "/"));
+    return JSON.parse(json) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
 }
 
 /** `null` = claim absent (legacy full access). */
