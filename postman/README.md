@@ -116,7 +116,9 @@ Copy **`access_token`** from the JSON into Postman **`access_token`**.
 - **GET** `/v1/inventory/chains/:code` — no auth; e.g. `{{chain_code}}`.
 - **GET** `/v1/inventory/me/chains` — Bearer; caller's allowed brands (**0018**).
 - **GET** `/v1/inventory/admin/staff` — Bearer + **manager**; list staff.
-- **POST** `/v1/inventory/admin/staff` — Bearer + **manager**; provision staff.
+- **POST** `/v1/inventory/admin/staff` — Bearer + **manager**; provision staff (legacy manual `auth0_sub`).
+- **POST** `/v1/inventory/admin/staff/invite` — Bearer + **manager**; pending staff + copy-link accept URL (**9B**).
+- **POST** `/v1/inventory/invites/accept` — Bearer (invited user); link account to pending staff (**9B**).
 - **PATCH** `/v1/inventory/admin/staff/:id` — Bearer + **manager**; update staff fields.
 - **PUT** `/v1/inventory/admin/staff/:id/chains` — Bearer + **manager**; replace brand grants.
 - **GET** `/v1/inventory/hotels` — Bearer token (optional **`x-chain-code`** via **`chain_code`** var); tests may set `hotel_id` from first row.

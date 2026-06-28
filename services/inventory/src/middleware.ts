@@ -9,7 +9,9 @@ export const requireChainForInventory: MiddlewareHandler<{ Bindings: Env }> = as
   if (c.req.path === "/health") return next();
   if (/^\/v1\/inventory\/chains(\/[^/]+)?$/.test(c.req.path)) return next();
   if (/^\/v1\/inventory\/staff\/access$/.test(c.req.path)) return next();
-  if (/^\/v1\/inventory\/admin\/staff(\/[^/]+)?(\/chains)?$/.test(c.req.path)) {
+  if (/^\/v1\/inventory\/internal\/staff\/claims$/.test(c.req.path)) return next();
+  if (/^\/v1\/inventory\/invites\/accept$/.test(c.req.path)) return next();
+  if (/^\/v1\/inventory\/admin\/staff(\/.*)?$/.test(c.req.path)) {
     return next();
   }
   if (/^\/v1\/inventory\/me\/chains$/.test(c.req.path)) return next();

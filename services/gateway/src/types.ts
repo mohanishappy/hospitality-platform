@@ -3,6 +3,8 @@ import type { JWTPayload } from "jose";
 export type GatewayEnv = {
   AUTH0_DOMAIN: string;
   AUTH0_AUDIENCE: string;
+  /** Shared secret for internal staff claims route (Auth0 Action). */
+  ACTION_CLAIMS_SECRET?: string;
   /** Optional: when set, `/health/ready` pings PostgREST (inventory.chain). */
   SUPABASE_URL?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;

@@ -6,6 +6,7 @@ import { CalendarPanel } from "./components/CalendarPanel";
 import { EnterprisePage } from "./components/EnterprisePage";
 import { PanelErrorBoundary } from "./components/ErrorBoundary";
 import { HomePage } from "./components/HomePage";
+import { InviteAcceptPage } from "./components/InviteAcceptPage";
 import { ReservationsPanel } from "./components/ReservationsPanel";
 import { SiteFooter } from "./components/SiteFooter";
 import {
@@ -16,6 +17,10 @@ import { useAuthReady } from "./hooks/useGatewayToken";
 import { useTenantPath } from "./hooks/useChainPath";
 import { fetchChainByCode } from "./api/gateway";
 import { consumePostLogoutReturn } from "./lib/authReturn";
+import {
+  isInviteAcceptPath,
+  parseInviteTokenFromSearch,
+} from "./lib/tenantPath";
 import type { AppConfig } from "./config";
 import "./App.css";
 
@@ -115,6 +120,11 @@ export function App({ config }: Props) {
       window.history.replaceState({}, document.title, path);
     }
   }, []);
+
+  if (isInviteAcceptPath(window.location.pathname)) {
+    const token = parseInviteTokenFromSearch(window.location.search);
+    return <InviteAcceptPage config={config} token={token} />;
+  }
 
   if (enterpriseCode) {
     return <EnterprisePage config={config} enterpriseCode={enterpriseCode} />;

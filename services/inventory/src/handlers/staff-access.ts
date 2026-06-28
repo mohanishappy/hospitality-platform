@@ -101,9 +101,10 @@ export async function getStaffAccess(c: Context<{ Bindings: Env }>) {
     const { data: member, error } = await supa
       .schema("inventory")
       .from("staff_member")
-      .select("id,all_chains,active")
+      .select("id,all_chains,active,status")
       .eq("enterprise_id", enterpriseId)
       .eq("auth0_sub", auth0Sub)
+      .eq("status", "active")
       .maybeSingle();
     if (error) {
       return problem(500, "Database error", formatPostgrestError(error));

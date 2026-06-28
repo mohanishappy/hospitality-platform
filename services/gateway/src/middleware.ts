@@ -27,6 +27,10 @@ import {
 import { fetchStaffAccess } from "./staff-access";
 import { problem } from "./problem";
 import {
+  allowsEmptyChainScope,
+  isActionClaimsRoute,
+} from "./route-scope";
+import {
   isPublicBookingRoute,
   isPublicChainCatalogRoute,
   readChainCode,
@@ -38,12 +42,35 @@ export const requireAuthAndChain: MiddlewareHandler<{
   Variables: GatewayVariables;
 }> = async (c, next) => {
   const p = c.req.path;
+  const method = c.req.method;
   if (
     p === "/health" ||
     p === "/health/ready" ||
     p === "/openapi.json" ||
     p === "/docs"
   ) {
+    return next();
+  }
+
+  if (isActionClaimsRoute(method, p)) {
+    const expected = c.env.ACTION_CLAIMS_SECRET?.trim();
+    if (!expected) {
+      return problem(
+        500,
+        "Server Misconfigured",
+        "ACTION_CLAIMS_SECRET must be set for staff claims lookup",
+        "about:blank#misconfigured"
+      );
+    }
+    const provided = c.req.header("x-action-secret")?.trim() ?? "";
+    if (!provided || provided !== expected) {
+      return problem(
+        401,
+        "Unauthorized",
+        "Invalid action secret",
+        "about:blank#invalid-action-secret"
+      );
+    }
     return next();
   }
 
@@ -142,7 +169,7 @@ export const requireAuthAndChain: MiddlewareHandler<{
       chainIds = [chainId];
     }
 
-    if (chainIds.length === 0) {
+    if (chainIds.length === 0 && !allowsEmptyChainScope(method, p)) {
       return problem(
         403,
         "Forbidden",
@@ -153,19 +180,22 @@ export const requireAuthAndChain: MiddlewareHandler<{
       );
     }
 
-    const chainCode = readChainCode(c);
-    const resolvedFromCode = chainCode
-      ? await resolveChainByCode(c.env, chainCode)
-      : null;
-    const activeChainId = pickActiveChainId(
-      chainIds,
-      chainId,
-      resolvedFromCode
-    );
-
+    if (chainIds.length > 0) {
+      const chainCode = readChainCode(c);
+      const resolvedFromCode = chainCode
+        ? await resolveChainByCode(c.env, chainCode)
+        : null;
+      const activeChainId = pickActiveChainId(
+        chainIds,
+        chainId,
+        resolvedFromCode
+      );
+      c.set("chainId", activeChainId);
+      c.set("chainIds", chainIds);
+    } else {
+      c.set("chainIds", []);
+    }
     c.set("jwt", payload);
-    c.set("chainId", activeChainId);
-    c.set("chainIds", chainIds);
     if (enterpriseId) c.set("enterpriseId", enterpriseId);
     const userEmail = getUserEmail(payload);
     if (userEmail) c.set("userEmail", userEmail);

@@ -345,6 +345,32 @@ export function fetchMyChains(gatewayUrl: string, accessToken: string) {
   });
 }
 
+export type AcceptInviteResponse = {
+  accepted: boolean;
+  staff_member_id: string;
+  enterprise_id: string;
+  message?: string;
+};
+
+export function acceptStaffInvite(
+  gatewayUrl: string,
+  accessToken: string,
+  token: string
+) {
+  return gatewayFetch<AcceptInviteResponse>(
+    gatewayUrl,
+    "/v1/inventory/invites/accept",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ token }),
+    }
+  );
+}
+
 export function fetchChains(gatewayUrl: string) {
   return gatewayFetch<ChainsResponse>(gatewayUrl, "/v1/inventory/chains");
 }

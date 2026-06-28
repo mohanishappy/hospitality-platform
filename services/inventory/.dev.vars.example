@@ -1,2 +1,6 @@
 SUPABASE_URL=https://xxxx.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+# Auth0 Post Login Action claims lookup (Phase 9B)
+ACTION_CLAIMS_SECRET=generate-a-long-random-string
+# Optional: absolute invite links in POST /admin/staff/invite responses
+# INVITE_BASE_URL=http://localhost:5173

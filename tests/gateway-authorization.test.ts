@@ -102,6 +102,18 @@ describe("requiredPermissions", () => {
       "inventory:read",
     ]);
   });
+
+  it("maps invite accept to inventory:read", () => {
+    expect(
+      requiredPermissions("POST", "/v1/inventory/invites/accept")
+    ).toEqual(["inventory:read"]);
+  });
+
+  it("maps staff invite to staff:admin", () => {
+    expect(
+      requiredPermissions("POST", "/v1/inventory/admin/staff/invite")
+    ).toEqual(["staff:admin"]);
+  });
 });
 
 describe("effectivePermissions", () => {

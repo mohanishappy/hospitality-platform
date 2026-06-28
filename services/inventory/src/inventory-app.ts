@@ -21,6 +21,8 @@ import {
   putAdminStaffChains,
 } from "./handlers/admin-staff";
 import { getMyChains, getStaffAccess } from "./handlers/staff-access";
+import { getInternalStaffClaims } from "./handlers/staff-claims";
+import { acceptStaffInvite, createStaffInvite } from "./handlers/staff-invite";
 
 export function inventoryApp() {
   const r = new Hono<{ Bindings: Env }>();
@@ -29,9 +31,12 @@ export function inventoryApp() {
   r.get("/enterprises/:code", getEnterpriseByCode);
   r.get("/enterprises/:code/chains", listEnterpriseChains);
   r.get("/staff/access", getStaffAccess);
+  r.get("/internal/staff/claims", getInternalStaffClaims);
   r.get("/me/chains", getMyChains);
+  r.post("/invites/accept", acceptStaffInvite);
   r.get("/admin/staff", listAdminStaff);
   r.post("/admin/staff", createAdminStaff);
+  r.post("/admin/staff/invite", createStaffInvite);
   r.patch("/admin/staff/:id", patchAdminStaff);
   r.put("/admin/staff/:id/chains", putAdminStaffChains);
   r.get("/chains", listChains);

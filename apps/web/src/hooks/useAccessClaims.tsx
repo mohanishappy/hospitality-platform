@@ -137,7 +137,7 @@ function useAccessClaimsState(
               setChainIds(ids.length > 0 ? ids : undefined);
               if (ids.length === 0 && !isGuestOnlyRole(parsedRoles)) {
                 setAccessWarning(
-                  "No brand access for this account. Ask a manager to provision your staff profile in the database (inventory.staff_member)."
+                  "No brand access for this account. Ask a manager to send you a staff invite, or accept a pending invite link."
                 );
               }
             }
@@ -147,7 +147,7 @@ function useAccessClaimsState(
               if (err instanceof GatewayError && err.status === 403) {
                 setAccessWarning(
                   err.message ||
-                    "Staff account not provisioned or disabled. Update inventory.staff_member with your JWT sub after first login."
+                    "Staff account not provisioned or disabled. Accept your invite link or ask a manager for access."
                 );
               }
             }

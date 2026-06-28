@@ -496,9 +496,83 @@
             "description": "Replace **`staff_chain_grant`** rows. Staff must have **`all_chains`: false**; use **PATCH** to set **`all_chains`: true** for corporate access."
           },
           "response": []
+        },
+        {
+          "name": "POST Invite staff (copy link)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const j = pm.response.json();",
+                  "    const url = j && j.invite && j.invite.accept_url;",
+                  "    if (url) {",
+                  "        pm.collectionVariables.set('invite_accept_url', url);",
+                  "        if (pm.environment.name) {",
+                  "            pm.environment.set('invite_accept_url', url);",
+                  "        }",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"new.staff@example.com\",\n  \"intended_role\": \"front_desk\",\n  \"all_chains\": false,\n  \"chain_ids\": [\n    \"a1111111-1111-4111-8111-111111111111\"\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/v1/inventory/admin/staff/invite",
+            "description": "**Phase 9B:** Create pending staff + invite token. Response includes **`invite.accept_url`** (copy to browser; set **`INVITE_BASE_URL`** on inventory for absolute SPA links). Saves **`invite_accept_url`** on **201**."
+          },
+          "response": []
         }
       ],
-      "description": "Manager-only staff provisioning (**0018**). Token needs **`manager`** role and matching **`inventory.staff_member`** row. See **`docs/AUTHORIZATION.md`**."
+      "description": "Manager-only staff provisioning (**0018** / **0019** invite). Token needs **`manager`** role. **POST …/invite** is the preferred path (no manual **`auth0_sub`**). See **`docs/AUTHORIZATION.md`**."
+    },
+    {
+      "name": "01b — Accept staff invite",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{access_token}}",
+            "type": "string"
+          }
+        ]
+      },
+      "item": [
+        {
+          "name": "POST Accept invite",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{invite_token}}\"\n}"
+            },
+            "url": "{{baseUrl}}/v1/inventory/invites/accept",
+            "description": "Bearer must be the **invited user's** login (email must match invite). Set **`invite_token`** from the `token=` query param in **`invite_accept_url`**, or open the SPA **`/invite/accept?token=…`** link. Re-login after **200** so the Auth0 Action refreshes JWT claims."
+          },
+          "response": []
+        }
+      ],
+      "description": "**Phase 9B:** Link **`auth0_sub`** after invite. Works without brand scope on the token (**guest** role is enough)."
     },
     {
       "name": "02 — Reservations",
