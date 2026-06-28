@@ -38,4 +38,19 @@ describe("allowsEmptyChainScope", () => {
   it("denies regular inventory reads without scope", () => {
     expect(allowsEmptyChainScope("GET", "/v1/inventory/hotels")).toBe(false);
   });
+
+  it("allows admin catalog routes without brand scope", () => {
+    expect(
+      allowsEmptyChainScope(
+        "GET",
+        "/v1/inventory/admin/chains/00000000-0000-0000-0000-000000000001/hotels"
+      )
+    ).toBe(true);
+    expect(
+      allowsEmptyChainScope(
+        "POST",
+        "/v1/inventory/admin/hotels/11111111-1111-4111-8111-111111111111/room-types"
+      )
+    ).toBe(true);
+  });
 });

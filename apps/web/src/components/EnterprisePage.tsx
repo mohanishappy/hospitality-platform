@@ -4,7 +4,7 @@ import {
   fetchEnterpriseChains,
   type ChainSummary,
 } from "../api/gateway";
-import { chainPath } from "../lib/tenantPath";
+import { chainPath, enterpriseAdminPath } from "../lib/tenantPath";
 import type { AppConfig } from "../config";
 import { SiteFooter } from "./SiteFooter";
 import { AuthBar } from "./AuthBar";
@@ -25,6 +25,7 @@ type Props = {
 
 function EnterpriseSiteInner({
   config,
+  enterpriseCode,
   enterpriseName,
   chains,
 }: {
@@ -35,7 +36,7 @@ function EnterpriseSiteInner({
 }) {
   const { isAuthenticated } = useAuth0();
   const { ready } = useAuthReady();
-  const { can, isGuestOnly, accessWarning } = useAccessClaims();
+  const { can, isGuestOnly, accessWarning, isManager } = useAccessClaims();
 
   const showReservations =
     ready && isAuthenticated && can("reservations:read");
@@ -60,6 +61,16 @@ function EnterpriseSiteInner({
             Choose a brand to book, or sign in to view reservations across all
             brands.
           </p>
+          {isManager && (
+            <p>
+              <a
+                href={enterpriseAdminPath(enterpriseCode)}
+                className="admin-portal-link"
+              >
+                Enterprise admin →
+              </a>
+            </p>
+          )}
         </section>
 
         <section className="panel panel-wide brand-picker">

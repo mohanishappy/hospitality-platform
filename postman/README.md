@@ -121,6 +121,13 @@ Copy **`access_token`** from the JSON into Postman **`access_token`**.
 - **POST** `/v1/inventory/invites/accept` — Bearer (invited user); link account to pending staff (**9B**).
 - **PATCH** `/v1/inventory/admin/staff/:id` — Bearer + **manager**; update staff fields.
 - **PUT** `/v1/inventory/admin/staff/:id/chains` — Bearer + **manager**; replace brand grants.
+- **GET** `/v1/inventory/admin/chains/:chainId/hotels` — Bearer + **manager**; list hotels for a brand (**10C**).
+- **POST** `/v1/inventory/admin/chains/:chainId/hotels` — Bearer + **manager**; create hotel (**10C**).
+- **GET** `/v1/inventory/admin/hotels/:hotelId` — Bearer + **manager**; hotel detail + booking policies (**10C**).
+- **PATCH** `/v1/inventory/admin/hotels/:hotelId` — Bearer + **manager**; update hotel / policies (**10C**).
+- **GET** `/v1/inventory/admin/hotels/:hotelId/room-types` — Bearer + **manager**; room types with BAR (**10C**).
+- **POST** `/v1/inventory/admin/hotels/:hotelId/room-types` — Bearer + **manager**; create room type (**10C**).
+- **PATCH** `/v1/inventory/admin/room-types/:roomTypeId` — Bearer + **manager**; update room type (**10C**).
 - **GET** `/v1/inventory/hotels` — Bearer token (optional **`x-chain-code`** via **`chain_code`** var); tests may set `hotel_id` from first row.
 - **GET** `/v1/inventory/hotels/:id` — Bearer; e.g. `{{hotel_id}}`.
 - **GET** `/v1/inventory/hotels/:hotelId/room-types` — Bearer; e.g. `{{hotel_id}}` (tests may set `room_type_id`).
@@ -133,6 +140,29 @@ Copy **`access_token`** from the JSON into Postman **`access_token`**.
 - **PATCH** `/v1/reservations/:id` — Bearer; JSON `{ "status": "confirmed" | "cancelled" }`; optional **`cancellation_reason`** when cancelling (see **Cancel**).
 - **PATCH** `/v1/reservations/:id/notes` — Bearer; `{ "internal_note"?, "guest_note"? }` (at least one field).
 - **PATCH** `/v1/reservations/:id/guest` — partial contact fields; see **PATCH Guest contact**.
+
+---
+
+## Guest promo flow (Phase 10A)
+
+End-to-end on brand **DEMO** without staff login (public booking):
+
+1. In **00 — Public**, run **GET Search stays (public + SAVE5)** — header **`x-chain-code: DEMO`**, query **`promotion_code=SAVE5`**. Expect **`pricing.discount_cents`** on hits when the promo applies.
+2. Run the same dates **without** `promotion_code` ( **GET Search stays** in **01 — Inventory** with **`chain_code=DEMO`**, or clear promo in URL) and compare **`total_cents`**.
+3. For **LOS3**, use **GET Search stays (public + LOS3)** with **3+ nights** (`check_in` / `check_out` on the collection).
+4. Pick a hit: copy **`pricing.rate_plan_code`** into **`rate_plan_code`**, run **GET Room type availability & quote**, then **POST Create reservation** with matching **`rate_plan_code`** / **`promotion_code`** and **`expected_total_cents`** from the quote.
+
+SPA equivalent: open **`/c/DEMO`**, enter promo on the search form, complete book flow.
+
+Requires migrations **0014** (rate plans / promotions) and **0020** (BAR seed on all demo room types).
+
+---
+
+## Admin catalog (Phase 10C)
+
+Folder **01c — Admin catalog** — manager token, **`staff:admin`**. Set **`admin_chain_id`** (DEMO default: `00000000-0000-0000-0000-000000000001`) or run **GET My chains** first. Clear **`chain_code`** when calling enterprise-wide admin routes.
+
+Typical flow: **GET List hotels (admin)** → **POST Create hotel** → **POST Create room type** → verify in **GET Search stays** on that brand (after ~60s gateway cache).
 
 ---
 

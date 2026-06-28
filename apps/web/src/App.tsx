@@ -3,6 +3,7 @@ import { useAuth0 } from "@auth0/auth0-react";
 import { BookingPanel } from "./components/BookingPanel";
 import { BrandHeader } from "./components/BrandHeader";
 import { CalendarPanel } from "./components/CalendarPanel";
+import { EnterpriseAdminPage } from "./components/EnterpriseAdminPage";
 import { EnterprisePage } from "./components/EnterprisePage";
 import { PanelErrorBoundary } from "./components/ErrorBoundary";
 import { HomePage } from "./components/HomePage";
@@ -112,7 +113,7 @@ function ChainSite({ config, chainCode }: { config: AppConfig; chainCode: string
 }
 
 export function App({ config }: Props) {
-  const { chainCode, enterpriseCode } = useTenantPath();
+  const { chainCode, enterpriseCode, adminRoute } = useTenantPath();
 
   useEffect(() => {
     const path = consumePostLogoutReturn();
@@ -124,6 +125,16 @@ export function App({ config }: Props) {
   if (isInviteAcceptPath(window.location.pathname)) {
     const token = parseInviteTokenFromSearch(window.location.search);
     return <InviteAcceptPage config={config} token={token} />;
+  }
+
+  if (adminRoute) {
+    return (
+      <EnterpriseAdminPage
+        config={config}
+        enterpriseCode={adminRoute.enterpriseCode}
+        tab={adminRoute.tab}
+      />
+    );
   }
 
   if (enterpriseCode) {

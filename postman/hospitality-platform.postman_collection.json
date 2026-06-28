@@ -97,6 +97,16 @@
       "key": "staff_member_id",
       "value": "",
       "description": "Set by **POST Create staff member** or manually for admin PATCH/PUT."
+    },
+    {
+      "key": "admin_chain_id",
+      "value": "00000000-0000-0000-0000-000000000001",
+      "description": "Brand UUID for **01c — Admin catalog** (DEMO). **GET My chains** may overwrite **chain_id**."
+    },
+    {
+      "key": "admin_room_type_id",
+      "value": "",
+      "description": "Set by **POST Create room type (admin)** or manually."
     }
   ],
   "event": [
@@ -198,9 +208,45 @@
             "description": "Single brand metadata by code (uses **`chain_code`** var, default **HBR**)."
           },
           "response": []
+        },
+        {
+          "name": "GET Search stays (public + SAVE5)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-chain-code",
+                "value": "DEMO"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/inventory/search?check_in={{check_in}}&check_out={{check_out}}&sort=price&limit=20&promotion_code=SAVE5",
+            "description": "**Phase 10A:** Anonymous booking on brand **DEMO** with promo **SAVE5** (500 bps off). Requires migrations **0014** + **0020**. Compare **`pricing.discount_cents`** / **`total_cents`** vs the same search without **`promotion_code`**. SPA: promo field on **`/c/DEMO`**."
+          },
+          "response": []
+        },
+        {
+          "name": "GET Search stays (public + LOS3)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-chain-code",
+                "value": "DEMO"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/inventory/search?check_in={{check_in}}&check_out={{check_out}}&sort=price&limit=20&rate_plan_code=LOS3",
+            "description": "**Phase 10A:** **LOS3** rate plan on **DEMO** — use **`check_in`** / **`check_out`** spanning **3+ nights** (default collection dates are 3 nights). Echo **`pricing.rate_plan_code`** through availability + **POST Create reservation**."
+          },
+          "response": []
         }
       ],
-      "description": "Unauthenticated smoke checks and public catalog."
+      "description": "Unauthenticated smoke checks and public catalog. **Guest promo demo (10A):** last two requests use **`x-chain-code: DEMO`** + **`SAVE5`** / **`LOS3`**."
     },
     {
       "name": "01 — Inventory",
@@ -573,6 +619,170 @@
         }
       ],
       "description": "**Phase 9B:** Link **`auth0_sub`** after invite. Works without brand scope on the token (**guest** role is enough)."
+    },
+    {
+      "name": "01c — Admin catalog",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{access_token}}",
+            "type": "string"
+          }
+        ]
+      },
+      "item": [
+        {
+          "name": "GET List hotels (admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/inventory/admin/chains/{{admin_chain_id}}/hotels",
+            "description": "**Phase 10C:** Hotels for a brand. Requires **manager** + **`staff:admin`**. Clear **`chain_code`** for enterprise-wide admin context, or set **`admin_chain_id`** (DEMO UUID default)."
+          },
+          "response": []
+        },
+        {
+          "name": "POST Create hotel (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const j = pm.response.json();",
+                  "    const id = j && j.hotel && j.hotel.id;",
+                  "    if (id) {",
+                  "        pm.collectionVariables.set('hotel_id', id);",
+                  "        if (pm.environment.name) {",
+                  "            pm.environment.set('hotel_id', id);",
+                  "        }",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"ADM-H1\",\n  \"name\": \"Admin API Test Hotel\"\n}"
+            },
+            "url": "{{baseUrl}}/v1/inventory/admin/chains/{{admin_chain_id}}/hotels",
+            "description": "Create hotel under **`admin_chain_id`**. Change **`code`** if **409** (already exists). Saves **`hotel_id`** on **201**."
+          },
+          "response": []
+        },
+        {
+          "name": "GET Hotel (admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/inventory/admin/hotels/{{hotel_id}}",
+            "description": "Admin hotel detail including booking policy fields."
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH Hotel booking policy (admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"booking_min_los\": 2,\n  \"booking_timezone\": \"America/Los_Angeles\"\n}"
+            },
+            "url": "{{baseUrl}}/v1/inventory/admin/hotels/{{hotel_id}}",
+            "description": "Partial update: **`name`**, **`code`**, **`booking_min_los`**, **`booking_max_los`**, **`booking_timezone`**, CTA/CTD DOW arrays, **`booking_same_day_cutoff_time`**."
+          },
+          "response": []
+        },
+        {
+          "name": "GET Room types (admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/inventory/admin/hotels/{{hotel_id}}/room-types",
+            "description": "Room types for **`hotel_id`** with commercial fields (**`base_rate_cents`**, tax, fees)."
+          },
+          "response": []
+        },
+        {
+          "name": "POST Create room type (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const j = pm.response.json();",
+                  "    const id = j && j.room_type && j.room_type.id;",
+                  "    if (id) {",
+                  "        pm.collectionVariables.set('admin_room_type_id', id);",
+                  "        pm.collectionVariables.set('room_type_id', id);",
+                  "        if (pm.environment.name) {",
+                  "            pm.environment.set('admin_room_type_id', id);",
+                  "            pm.environment.set('room_type_id', id);",
+                  "        }",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"ADM-STD\",\n  \"name\": \"Admin Test Standard\",\n  \"capacity\": 2,\n  \"units_total\": 5,\n  \"overbooking_allowance\": 0,\n  \"base_rate_cents\": 12500,\n  \"tax_rate_bps\": 850,\n  \"fee_fixed_cents\": 0\n}"
+            },
+            "url": "{{baseUrl}}/v1/inventory/admin/hotels/{{hotel_id}}/room-types",
+            "description": "Create room type. Appears in public search after gateway cache TTL (~60s). Saves **`admin_room_type_id`** + **`room_type_id`** on **201**."
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH Room type (admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"base_rate_cents\": 12900\n}"
+            },
+            "url": "{{baseUrl}}/v1/inventory/admin/room-types/{{admin_room_type_id}}",
+            "description": "Update BAR, units, tax, fees, or display fields. Use **`admin_room_type_id`** or **`room_type_id`**."
+          },
+          "response": []
+        }
+      ],
+      "description": "**Phase 10C:** Manager catalog CRUD (**FR-I8**, **FR-I9**). Token needs **manager** role. Target brand via **`admin_chain_id`**; hotel/room ids from create responses or **01 — Inventory** list calls."
     },
     {
       "name": "02 — Reservations",

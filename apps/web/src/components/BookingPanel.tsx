@@ -3,9 +3,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createReservation,
   fetchAvailability,
+  fetchHotels,
   fetchSearch,
   type AvailabilityQuote,
   type BookingAuth,
+  type HotelSummary,
   type InventorySearchHit,
   type ReservationDetail,
 } from "../api/gateway";
@@ -31,6 +33,8 @@ type Phase =
       hit: InventorySearchHit;
       quote: AvailabilityQuote;
       idempotencyKey: string;
+      promotionCode: string;
+      ratePlanCode: string | null;
     }
   | {
       name: "done";
@@ -49,6 +53,18 @@ function QuoteBreakdown({ quote }: { quote: AvailabilityQuote }) {
 
   return (
     <dl className="quote-breakdown">
+      {pricing.rate_plan_code && (
+        <div>
+          <dt>Rate plan</dt>
+          <dd>{pricing.rate_plan_code}</dd>
+        </div>
+      )}
+      {pricing.promotion_code && (
+        <div>
+          <dt>Promotion</dt>
+          <dd>{pricing.promotion_code}</dd>
+        </div>
+      )}
       {pricing.nightly_rate_cents != null && (
         <div>
           <dt>Nightly rate</dt>
@@ -63,9 +79,17 @@ function QuoteBreakdown({ quote }: { quote: AvailabilityQuote }) {
       )}
       {(pricing.discount_cents ?? 0) > 0 && (
         <div>
-          <dt>Promotion</dt>
+          <dt>Discount</dt>
           <dd>-{formatMoney(pricing.discount_cents!, currency)}</dd>
         </div>
+      )}
+      {(pricing.fee_line_items ?? []).map((fee, index) =>
+        (fee.amount_cents ?? 0) > 0 ? (
+          <div key={`${fee.code ?? "fee"}-${index}`}>
+            <dt>{fee.label ?? fee.code ?? "Fee"}</dt>
+            <dd>{formatMoney(fee.amount_cents!, currency)}</dd>
+          </div>
+        ) : null
       )}
       {(pricing.tax_cents ?? 0) > 0 && (
         <div>
@@ -73,7 +97,8 @@ function QuoteBreakdown({ quote }: { quote: AvailabilityQuote }) {
           <dd>{formatMoney(pricing.tax_cents!, currency)}</dd>
         </div>
       )}
-      {(pricing.fee_fixed_cents ?? 0) > 0 && (
+      {(pricing.fee_line_items ?? []).length === 0 &&
+        (pricing.fee_fixed_cents ?? 0) > 0 && (
         <div>
           <dt>Fees</dt>
           <dd>{formatMoney(pricing.fee_fixed_cents!, currency)}</dd>
@@ -108,6 +133,9 @@ export function BookingPanel({ gatewayUrl, audience, chainCode }: Props) {
   const [phase, setPhase] = useState<Phase>({ name: "search" });
   const [checkIn, setCheckIn] = useState(defaults.checkIn);
   const [checkOut, setCheckOut] = useState(defaults.checkOut);
+  const [promotionCode, setPromotionCode] = useState("");
+  const [hotelFilterId, setHotelFilterId] = useState("");
+  const [hotels, setHotels] = useState<HotelSummary[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -126,6 +154,22 @@ export function BookingPanel({ gatewayUrl, audience, chainCode }: Props) {
     );
   }, [user]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const auth = await resolveAuth();
+        const data = await fetchHotels(gatewayUrl, auth, chainCode);
+        if (!cancelled) setHotels(data.hotels ?? []);
+      } catch {
+        if (!cancelled) setHotels([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [chainCode, gatewayUrl, resolveAuth]);
+
   const resetBooking = useCallback(() => {
     setPhase({ name: "search" });
     setError(null);
@@ -137,7 +181,13 @@ export function BookingPanel({ gatewayUrl, audience, chainCode }: Props) {
     setError(null);
     try {
       const auth = await resolveAuth();
-      const data = await fetchSearch(gatewayUrl, auth, { checkIn, checkOut });
+      const promo = promotionCode.trim();
+      const data = await fetchSearch(gatewayUrl, auth, {
+        checkIn,
+        checkOut,
+        hotelIds: hotelFilterId ? [hotelFilterId] : undefined,
+        promotionCode: promo || undefined,
+      });
       setPhase({
         name: "results",
         checkIn,
@@ -149,13 +199,22 @@ export function BookingPanel({ gatewayUrl, audience, chainCode }: Props) {
     } finally {
       setBusy(false);
     }
-  }, [checkIn, checkOut, gatewayUrl, resolveAuth]);
+  }, [
+    checkIn,
+    checkOut,
+    gatewayUrl,
+    hotelFilterId,
+    promotionCode,
+    resolveAuth,
+  ]);
 
   const selectHit = useCallback(
     async (hit: InventorySearchHit) => {
       if (!hit.bookable) return;
       setBusy(true);
       setError(null);
+      const promo = promotionCode.trim();
+      const ratePlanCode = hit.pricing?.rate_plan_code?.trim() || undefined;
       try {
         const auth = await resolveAuth();
         const data = await fetchAvailability(gatewayUrl, auth, {
@@ -163,6 +222,8 @@ export function BookingPanel({ gatewayUrl, audience, chainCode }: Props) {
           roomTypeId: hit.room_type_id,
           checkIn: hit.check_in,
           checkOut: hit.check_out,
+          promotionCode: promo || undefined,
+          ratePlanCode,
         });
         const quote = data.availability;
         if (!quote.bookable) {
@@ -174,6 +235,8 @@ export function BookingPanel({ gatewayUrl, audience, chainCode }: Props) {
           hit,
           quote,
           idempotencyKey: crypto.randomUUID(),
+          promotionCode: promo,
+          ratePlanCode: quote.pricing?.rate_plan_code?.trim() ?? ratePlanCode ?? null,
         });
       } catch (err) {
         setError(err instanceof Error ? err.message : "Quote failed");
@@ -181,7 +244,7 @@ export function BookingPanel({ gatewayUrl, audience, chainCode }: Props) {
         setBusy(false);
       }
     },
-    [gatewayUrl, resolveAuth]
+    [gatewayUrl, promotionCode, resolveAuth]
   );
 
   const submitBooking = useCallback(async () => {
@@ -206,6 +269,8 @@ export function BookingPanel({ gatewayUrl, audience, chainCode }: Props) {
           check_in: phase.hit.check_in,
           check_out: phase.hit.check_out,
           expected_total_cents: total,
+          rate_plan_code: phase.ratePlanCode ?? undefined,
+          promotion_code: phase.promotionCode || undefined,
           guest: {
             first_name: firstName.trim(),
             last_name: lastName.trim(),
@@ -323,6 +388,33 @@ export function BookingPanel({ gatewayUrl, audience, chainCode }: Props) {
               required
             />
           </label>
+          {hotels.length > 1 && (
+            <label>
+              Hotel
+              <select
+                value={hotelFilterId}
+                onChange={(e) => setHotelFilterId(e.target.value)}
+              >
+                <option value="">All hotels</option>
+                {hotels.map((hotel) => (
+                  <option key={hotel.id} value={hotel.id}>
+                    {hotel.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <label>
+            Promo code
+            <input
+              type="text"
+              value={promotionCode}
+              onChange={(e) => setPromotionCode(e.target.value.toUpperCase())}
+              placeholder="Optional"
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </label>
           <button type="submit" disabled={busy}>
             {busy && phase.name === "search" ? "Searching…" : "Search"}
           </button>
@@ -334,7 +426,10 @@ export function BookingPanel({ gatewayUrl, audience, chainCode }: Props) {
       {phase.name === "results" && (
         <>
           {phase.hits.length === 0 && (
-            <p className="muted">No bookable room types for those dates.</p>
+            <p className="muted">
+              No bookable room types for those dates. Try different dates, another
+              hotel, or remove the promo code if one was applied.
+            </p>
           )}
           {phase.hits.length > 0 && (
             <ul className="search-results">

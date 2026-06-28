@@ -232,6 +232,8 @@ Tracker: [`docs/PHASE9_PLAN.md`](docs/PHASE9_PLAN.md).
 | **9F** | Admin brand CRUD API |
 | **9G** | `enterprise.active`, cache/audit polish |
 
+**Phase 10** (catalog, rates, booking UX): [`docs/PHASE10_PLAN.md`](docs/PHASE10_PLAN.md) — **10A/10B** in progress.
+
 **9B checklist** is at the bottom of `PHASE9_PLAN.md`.
 
 ---

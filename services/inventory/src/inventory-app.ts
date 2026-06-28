@@ -20,6 +20,18 @@ import {
   patchAdminStaff,
   putAdminStaffChains,
 } from "./handlers/admin-staff";
+import {
+  createAdminHotel,
+  getAdminHotel,
+  listAdminHotels,
+  patchAdminHotel,
+} from "./handlers/admin-hotels";
+import {
+  createAdminRoomType,
+  getAdminRoomType,
+  listAdminRoomTypes,
+  patchAdminRoomType,
+} from "./handlers/admin-room-types";
 import { getMyChains, getStaffAccess } from "./handlers/staff-access";
 import { getInternalStaffClaims } from "./handlers/staff-claims";
 import { acceptStaffInvite, createStaffInvite } from "./handlers/staff-invite";
@@ -39,6 +51,14 @@ export function inventoryApp() {
   r.post("/admin/staff/invite", createStaffInvite);
   r.patch("/admin/staff/:id", patchAdminStaff);
   r.put("/admin/staff/:id/chains", putAdminStaffChains);
+  r.get("/admin/chains/:chainId/hotels", listAdminHotels);
+  r.post("/admin/chains/:chainId/hotels", createAdminHotel);
+  r.get("/admin/hotels/:hotelId/room-types", listAdminRoomTypes);
+  r.post("/admin/hotels/:hotelId/room-types", createAdminRoomType);
+  r.get("/admin/hotels/:hotelId", getAdminHotel);
+  r.patch("/admin/hotels/:hotelId", patchAdminHotel);
+  r.get("/admin/room-types/:roomTypeId", getAdminRoomType);
+  r.patch("/admin/room-types/:roomTypeId", patchAdminRoomType);
   r.get("/chains", listChains);
   r.get("/chains/:code", getChainByCode);
   r.get("/search", searchStays);

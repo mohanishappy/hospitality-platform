@@ -118,6 +118,166 @@
   text-decoration: underline;
 }
 
+.admin-badge {
+  margin-left: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.admin-portal-link {
+  font-weight: 600;
+  color: #2f6fed;
+  text-decoration: none;
+}
+
+.admin-portal-link:hover {
+  text-decoration: underline;
+}
+
+.admin-nav {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 0.25rem;
+}
+
+.admin-nav-link {
+  padding: 0.5rem 0.85rem;
+  border-radius: 8px 8px 0 0;
+  text-decoration: none;
+  color: #64748b;
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.admin-nav-link:hover {
+  color: inherit;
+  background: #f1f5f9;
+}
+
+.admin-nav-link.active {
+  color: #2f6fed;
+  background: #eff6ff;
+  font-weight: 600;
+}
+
+@media (prefers-color-scheme: dark) {
+  .admin-nav {
+    border-bottom-color: #273044;
+  }
+
+  .admin-nav-link:hover {
+    background: #1e293b;
+  }
+
+  .admin-nav-link.active {
+    background: #172554;
+  }
+}
+
+.admin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 28rem;
+}
+
+.admin-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.checkbox-row {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.5rem !important;
+}
+
+.chain-checkboxes {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.chain-checkboxes legend {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.invite-url-box {
+  margin-top: 1rem;
+}
+
+.invite-url-box input {
+  width: 100%;
+  margin-top: 0.35rem;
+  font-family: ui-monospace, monospace;
+  font-size: 0.85rem;
+}
+
+.staff-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.staff-row {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .staff-row {
+    border-color: #273044;
+  }
+}
+
+.staff-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.staff-meta {
+  font-size: 0.85rem;
+}
+
+.staff-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.65rem;
+}
+
+.staff-edit-grants {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.staff-edit-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
 .section-title {
   margin: 0 0 1rem;
   font-size: 1.05rem;

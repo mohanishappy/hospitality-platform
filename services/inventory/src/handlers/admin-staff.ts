@@ -12,11 +12,13 @@ import type { Env } from "../types";
 type StaffRow = {
   id: string;
   enterprise_id: string;
-  auth0_sub: string;
+  auth0_sub: string | null;
   email: string;
   display_name: string | null;
   all_chains: boolean;
   active: boolean;
+  status?: string;
+  intended_role?: string;
   created_at: string;
   updated_at: string;
 };
@@ -97,6 +99,8 @@ function staffToJson(row: StaffRow, chainIds: string[]) {
     display_name: row.display_name,
     all_chains: row.all_chains,
     active: row.active,
+    status: row.status ?? (row.auth0_sub ? "active" : "pending"),
+    intended_role: row.intended_role ?? "front_desk",
     chain_ids: row.all_chains ? [] : chainIds,
     created_at: row.created_at,
     updated_at: row.updated_at,

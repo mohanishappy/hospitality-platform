@@ -1,6 +1,9 @@
 const CHAIN_PATH_RE = /^\/c\/([A-Za-z0-9_-]+)\/?$/;
 const ENTERPRISE_PATH_RE = /^\/e\/([A-Za-z0-9_-]+)\/?$/;
+const ENTERPRISE_ADMIN_RE = /^\/e\/([A-Za-z0-9_-]+)\/admin(?:\/([a-z]+))?\/?$/;
 const INVITE_ACCEPT_PATH = /^\/invite\/accept\/?$/;
+
+export type EnterpriseAdminTab = "staff" | "brands" | "properties";
 
 /** Parse tenant code from `/c/:chainCode` (case preserved for display; API uses uppercase). */
 export function parseChainCodeFromPath(pathname: string): string | null {
@@ -9,8 +12,30 @@ export function parseChainCodeFromPath(pathname: string): string | null {
 }
 
 export function parseEnterpriseCodeFromPath(pathname: string): string | null {
+  if (ENTERPRISE_ADMIN_RE.test(pathname)) return null;
   const match = ENTERPRISE_PATH_RE.exec(pathname);
   return match?.[1] ?? null;
+}
+
+export function parseEnterpriseAdminFromPath(pathname: string): {
+  enterpriseCode: string;
+  tab: EnterpriseAdminTab;
+} | null {
+  const match = ENTERPRISE_ADMIN_RE.exec(pathname);
+  if (!match?.[1]) return null;
+  const tabRaw = match[2]?.toLowerCase();
+  let tab: EnterpriseAdminTab = "staff";
+  if (tabRaw === "brands") tab = "brands";
+  else if (tabRaw === "properties") tab = "properties";
+  return { enterpriseCode: match[1], tab };
+}
+
+export function enterpriseAdminPath(
+  code: string,
+  tab: EnterpriseAdminTab = "staff"
+): string {
+  const base = `/e/${encodeURIComponent(code.trim())}/admin`;
+  return tab === "staff" ? base : `${base}/${tab}`;
 }
 
 export function isInviteAcceptPath(pathname: string): boolean {

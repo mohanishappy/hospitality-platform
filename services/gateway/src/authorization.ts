@@ -111,6 +111,12 @@ export function requiredPermissions(
       if (m === "GET") return ["staff:admin"];
       if (m === "POST" || m === "PATCH" || m === "PUT") return ["staff:admin"];
     }
+    if (path.startsWith("/v1/inventory/admin/")) {
+      if (m === "GET") return ["staff:admin"];
+      if (m === "POST" || m === "PATCH" || m === "PUT" || m === "DELETE") {
+        return ["staff:admin"];
+      }
+    }
     if (path === "/v1/inventory/invites/accept" && m === "POST") {
       return ["inventory:read"];
     }

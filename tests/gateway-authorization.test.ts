@@ -114,6 +114,15 @@ describe("requiredPermissions", () => {
       requiredPermissions("POST", "/v1/inventory/admin/staff/invite")
     ).toEqual(["staff:admin"]);
   });
+
+  it("requires staff:admin for admin hotel create", () => {
+    expect(
+      requiredPermissions(
+        "POST",
+        "/v1/inventory/admin/chains/a1111111-1111-4111-8111-111111111111/hotels"
+      )
+    ).toEqual(["staff:admin"]);
+  });
 });
 
 describe("effectivePermissions", () => {

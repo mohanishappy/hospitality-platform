@@ -11,7 +11,7 @@ Microservices on **Cloudflare Workers** with **Supabase Postgres** and **Auth0**
 | `services/inventory` | Hotels + **room types** (list/detail under gateway) |
 | `services/reservations` | **POST/PATCH/GET** reservations; list; **status** lifecycle; idempotent **201**/**200** on create |
 | `supabase/config.toml` | Supabase CLI config (local dev / **`supabase db push`** to a linked project) |
-| `supabase/migrations` | SQL: through **`0016` — cancellation metadata, reservation notes, soft holds, ETags, rate plans, search, calendar** |
+| `supabase/migrations` | SQL: through **`0020`** — demo BAR seed; **`0019`** invite + DB roles; **`0016`** cancellation notes, soft holds, ETags, rate plans, search, calendar |
 | `apps/web` | **Phase 8A–8D** SPA — Vite + React + Auth0; health, booking, calendar, staff reservations ([`.env.example`](apps/web/.env.example)) |
 | `postman/` | Postman **collection** + **example environment** for gateway requests ([`postman/README.md`](postman/README.md)) |
 | `docs/FR_STATUS.md` | Backlog **FR** status through phases **0–7** (what shipped vs planned) |
@@ -32,7 +32,7 @@ Microservices on **Cloudflare Workers** with **Supabase Postgres** and **Auth0**
 ## 1) Supabase
 
 1. Create a project.
-2. Run migrations in order in the SQL editor (or `supabase db push`): [`0001_init.sql`](supabase/migrations/0001_init.sql) through [`0016_cancellation_notes.sql`](supabase/migrations/0016_cancellation_notes.sql).
+2. Run migrations in order in the SQL editor (or `supabase db push`): [`0001_init.sql`](supabase/migrations/0001_init.sql) through [`0020_demo_pricing_seed.sql`](supabase/migrations/0020_demo_pricing_seed.sql).
 3. **Turn on the Data API** (REST / PostgREST): Dashboard → **Project Settings** → **Data API** — use **Enable** if the API is off. Your Workers call this layer; it must be on.
 4. **Expose API schemas** (required for `supabase-js` `.schema(...)`): same **Data API** page (or **Project Settings → API** on older dashboards) → **Exposed schemas**. Include at least `public`, `inventory`, and `reservations` (comma-separated; keep existing entries like `public`). Save. Without this, hotels returns `Invalid schema: inventory`.  
    *Some UIs only show “Exposed schemas” after the Data API is enabled.*

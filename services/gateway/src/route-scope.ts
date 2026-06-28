@@ -3,6 +3,7 @@ export function allowsEmptyChainScope(method: string, path: string): boolean {
   const m = method.toUpperCase();
   if (m === "GET" && path === "/v1/inventory/me/chains") return true;
   if (path.startsWith("/v1/inventory/admin/staff")) return true;
+  if (path.startsWith("/v1/inventory/admin/")) return true;
   if (m === "POST" && path === "/v1/inventory/invites/accept") return true;
   if (path.startsWith("/v1/inventory/platform/")) return true;
   return false;

@@ -371,6 +371,111 @@ export function acceptStaffInvite(
   );
 }
 
+export type StaffMember = {
+  id: string;
+  enterprise_id: string;
+  auth0_sub: string | null;
+  email: string;
+  display_name: string | null;
+  all_chains: boolean;
+  active: boolean;
+  status: string;
+  intended_role: string;
+  chain_ids: string[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type StaffListResponse = {
+  staff: StaffMember[];
+};
+
+export type StaffInviteResponse = {
+  invite: {
+    staff_member_id: string;
+    email: string;
+    intended_role: string;
+    status: string;
+    expires_at: string;
+    accept_url: string;
+  };
+};
+
+function adminAuthHeaders(accessToken: string): Record<string, string> {
+  return {
+    Authorization: `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
+  };
+}
+
+export function listAdminStaff(gatewayUrl: string, accessToken: string) {
+  return gatewayFetch<StaffListResponse>(
+    gatewayUrl,
+    "/v1/inventory/admin/staff",
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+}
+
+export function inviteStaffMember(
+  gatewayUrl: string,
+  accessToken: string,
+  body: {
+    email: string;
+    intended_role: string;
+    all_chains?: boolean;
+    chain_ids?: string[];
+    display_name?: string;
+  }
+) {
+  return gatewayFetch<StaffInviteResponse>(
+    gatewayUrl,
+    "/v1/inventory/admin/staff/invite",
+    {
+      method: "POST",
+      headers: adminAuthHeaders(accessToken),
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export function patchStaffMember(
+  gatewayUrl: string,
+  accessToken: string,
+  staffId: string,
+  body: {
+    active?: boolean;
+    all_chains?: boolean;
+    display_name?: string | null;
+  }
+) {
+  return gatewayFetch<{ staff: StaffMember }>(
+    gatewayUrl,
+    `/v1/inventory/admin/staff/${encodeURIComponent(staffId)}`,
+    {
+      method: "PATCH",
+      headers: adminAuthHeaders(accessToken),
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export function replaceStaffChainGrants(
+  gatewayUrl: string,
+  accessToken: string,
+  staffId: string,
+  chainIds: string[]
+) {
+  return gatewayFetch<{ staff: StaffMember }>(
+    gatewayUrl,
+    `/v1/inventory/admin/staff/${encodeURIComponent(staffId)}/chains`,
+    {
+      method: "PUT",
+      headers: adminAuthHeaders(accessToken),
+      body: JSON.stringify({ chain_ids: chainIds }),
+    }
+  );
+}
+
 export function fetchChains(gatewayUrl: string) {
   return gatewayFetch<ChainsResponse>(gatewayUrl, "/v1/inventory/chains");
 }
@@ -382,10 +487,29 @@ export function fetchChainByCode(gatewayUrl: string, chainCode: string) {
   );
 }
 
+export type BookingPricingOptions = {
+  promotionCode?: string;
+  ratePlanCode?: string;
+};
+
+function appendPricingQuery(
+  qs: URLSearchParams,
+  options?: BookingPricingOptions
+) {
+  const promo = options?.promotionCode?.trim();
+  if (promo) qs.set("promotion_code", promo);
+  const plan = options?.ratePlanCode?.trim();
+  if (plan) qs.set("rate_plan_code", plan);
+}
+
 export function fetchSearch(
   gatewayUrl: string,
   auth: BookingAuth | string,
-  params: { checkIn: string; checkOut: string; hotelIds?: string[] }
+  params: {
+    checkIn: string;
+    checkOut: string;
+    hotelIds?: string[];
+  } & BookingPricingOptions
 ) {
   const headers =
     typeof auth === "string"
@@ -400,6 +524,7 @@ export function fetchSearch(
   if (params.hotelIds?.length) {
     qs.set("hotel_ids", params.hotelIds.join(","));
   }
+  appendPricingQuery(qs, params);
   return gatewayFetch<SearchResponse>(
     gatewayUrl,
     `/v1/inventory/search?${qs.toString()}`,
@@ -415,7 +540,7 @@ export function fetchAvailability(
     roomTypeId: string;
     checkIn: string;
     checkOut: string;
-  }
+  } & BookingPricingOptions
 ) {
   const headers =
     typeof auth === "string"
@@ -425,6 +550,7 @@ export function fetchAvailability(
     check_in: params.checkIn,
     check_out: params.checkOut,
   });
+  appendPricingQuery(qs, params);
   return gatewayFetch<AvailabilityResponse>(
     gatewayUrl,
     `/v1/inventory/hotels/${params.hotelId}/room-types/${params.roomTypeId}/availability?${qs.toString()}`,
@@ -442,6 +568,8 @@ export function createReservation(
     check_in: string;
     check_out: string;
     expected_total_cents?: number;
+    rate_plan_code?: string;
+    promotion_code?: string;
     guest: GuestInput;
   }
 ) {
@@ -452,10 +580,17 @@ export function createReservation(
     "Content-Type": "application/json",
     "Idempotency-Key": idempotencyKey,
   };
+  const payload: Record<string, unknown> = { ...body };
+  const plan = body.rate_plan_code?.trim();
+  const promo = body.promotion_code?.trim();
+  if (plan) payload.rate_plan_code = plan;
+  else delete payload.rate_plan_code;
+  if (promo) payload.promotion_code = promo;
+  else delete payload.promotion_code;
   return gatewayFetch<CreateReservationResponse>(gatewayUrl, "/v1/reservations", {
     method: "POST",
     headers,
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
   });
 }
 

@@ -35,6 +35,8 @@ Aligned with [`REQUIREMENTS.md`](REQUIREMENTS.md) **§2** backlog and [`IMPLEMEN
 | FR-U1 | Guest/staff SPA | **8A–8D** shipped in **`apps/web`** (shell, booking, calendar, reservations UI); **8E** Pages deploy. |
 | FR-U2 | Staff calendar UI | **Phase 8C** — read-only month grid from **`GET …/calendar`** (hotel + room type pickers). |
 
-**Migrations:** apply through [`0018_staff_brand_access.sql`](../supabase/migrations/0018_staff_brand_access.sql). **`0019`** (invite + DB roles) — Phase **9B**.
+**Migrations:** apply through [`0019_staff_invite_db_roles.sql`](../supabase/migrations/0019_staff_invite_db_roles.sql). **`0020`** (demo pricing seed) — Phase **10B**.
 
-**Demo seed (0014):** chain **`DEMO`** — rate plan **`LOS3`** (3+ night tier **9000** cents/night on **DEMO-H1** `STD-QN` when BAR is higher); promotion **`SAVE5`** (500 bps off).
+**Phase 10:** see [`PHASE10_PLAN.md`](PHASE10_PLAN.md). **10A** — guest promo/hotel filter in booking SPA; **10B** — migration **0020** BAR seed.
+
+**Demo seed (0014 + 0020):** chain **`DEMO`** — **`LOS3`** (3+ nights @ **9000** cents/night on **DEMO-H1** `STD-QN`); **`SAVE5`** (500 bps off); all brands have **`base_rate_cents`** after **0020**.
