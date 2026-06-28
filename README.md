@@ -15,6 +15,7 @@ Microservices on **Cloudflare Workers** with **Supabase Postgres** and **Auth0**
 | `apps/web` | **Phase 8A–8D** SPA — Vite + React + Auth0; health, booking, calendar, staff reservations ([`.env.example`](apps/web/.env.example)) |
 | `postman/` | Postman **collection** + **example environment** for gateway requests ([`postman/README.md`](postman/README.md)) |
 | `docs/FR_STATUS.md` | Backlog **FR** status through phases **0–7** (what shipped vs planned) |
+| `AGENTS.md` | Agent/developer reference — stack, docs map, patterns, auth decisions, Phase 9 |
 | `scripts/smoke-deploy-public.mjs` | Post-deploy public smoke (`npm run smoke:deploy`; CI **smoke** job on `main`) |
 | `scripts/smoke-api.mjs` | Golden-path booking smoke (`npm run smoke:api`; optional CI step with **`SMOKE_ACCESS_TOKEN`**) |
 | `scripts/run-newman.mjs` | Newman Postman run (`npm run smoke:newman`; optional CI step) |
@@ -63,16 +64,21 @@ npx supabase db push
 ## 2) Auth0
 
 1. Create an **API** with identifier = your `AUTH0_AUDIENCE` (e.g. `https://hospitality-api`).
-2. Create a **Single Page Application** (for the UI later) with allowed callbacks.
-3. Add an **Action** (post-login / credentials) as described in **[`docs/AUTHORIZATION.md`](docs/AUTHORIZATION.md)** (Auth0 identity + roles only; brand scope is in the database). Demo enterprise id: `eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee` (Palladium Lodging Group).
+2. Create a **Single Page Application** for the booking/admin UI (and later a **second SPA** for Platform Portal — Phase **9E**).
+3. Add a **Post Login Action** as described in **[`docs/AUTHORIZATION.md`](docs/AUTHORIZATION.md)**.
 
-**Post Login Action (SPA users)** — Auth0 Dashboard → Actions → Library → **Build Custom** → trigger **Login / Post Login**. Enable **RBAC** on your API (Settings → RBAC Settings → **Enable RBAC**, **Add Permissions in the Access Token**). Create roles **`guest`**, **`front_desk`**, **`manager`**, **`read_only`** and assign them to users as needed.
+**Authorization model (target — Phase 9B):** Auth0 handles **identity only**. App **roles** and **enterprise_id** come from **`inventory.staff_member`** via a Post Login Action that calls inventory **`GET /v1/inventory/internal/staff/claims`**. **Do not assign Auth0 RBAC roles per staff member** once 9B ships — managers invite staff in the Enterprise Admin Portal. See **[`docs/PHASE9_PLAN.md`](docs/PHASE9_PLAN.md)**.
 
 The SPA passes **`chain_code`** on login (from `/c/:chainCode`) via `authorizationParams`; the gateway uses **`x-chain-code`** on API calls to pick the active brand. Users must **log out and sign in again** after changing the Action.
 
-**Staff brand access (database)** — see **[`docs/AUTHORIZATION.md`](docs/AUTHORIZATION.md)** for the full model, **admin staff API**, and future admin UI. Summary: per-brand scope lives in Supabase ([`0018_staff_brand_access.sql`](supabase/migrations/0018_staff_brand_access.sql)). Managers use **`/v1/inventory/admin/staff`** to provision staff; everyone else needs a **`staff_member`** row keyed by JWT **`sub`**. Set **`all_chains = true`** for corporate access, or assign **`chain_ids`** via the API. Changes apply within ~60s (gateway cache). Guests are never restricted by brand — only by email on their reservations.
+### Interim setup (until Phase 9B ships)
 
-After your first staff login, copy **`sub`** from [jwt.io](https://jwt.io) and update the seed row (or insert a new one):
+For local/demo with migration **0018** seed rows only:
+
+- Enable **RBAC** on your API (Settings → RBAC Settings → **Enable RBAC**). Define role names **`guest`**, **`front_desk`**, **`manager`**, **`read_only`** (names only — used on the JWT after 9B).
+- **Manually assign** the **`manager`** role to demo users in Auth0 Dashboard.
+- Use the **legacy Action** below (hardcoded PLG `enterprise_id`, reads Auth0 RBAC assignment).
+- After first staff login, copy JWT **`sub`** and run SQL:
 
 ```sql
 update inventory.staff_member
@@ -80,28 +86,69 @@ set auth0_sub = 'auth0|YOUR_SUB_HERE'
 where email = 'manager@plg.demo';
 ```
 
+Remove these manual steps from your runbook once **9B** (invite + DB-driven claims) is deployed.
+
+### Target Post Login Action (Phase 9B)
+
+Replace the legacy Action with one that loads claims from inventory (requires **`ACTION_CLAIMS_SECRET`** on inventory + Action secret):
+
 ```javascript
 /**
- * @param {Event} event — https://auth0.com/docs/customize/actions/flows-and-triggers/login-flow
+ * Post Login — DB-driven enterprise_id + roles (see docs/AUTHORIZATION.md).
+ * @param {Event} event
  * @param {PostLoginAPI} api
  */
 exports.onExecutePostLogin = async (event, api) => {
   const ns = "https://hospitality.app/claims";
+  const email = event.user.email;
+  if (!email) return;
 
-  // Must match inventory.enterprise.id for this tenant (0017_enterprise.sql).
+  const claimsUrl = `${event.secrets.INVENTORY_CLAIMS_URL}?email=${encodeURIComponent(email)}`;
+  let enterpriseId = null;
+  let roles = ["guest"];
+
+  try {
+    const res = await fetch(claimsUrl, {
+      headers: { "x-action-secret": event.secrets.ACTION_CLAIMS_SECRET },
+    });
+    if (res.ok) {
+      const body = await res.json();
+      if (body.enterprise_id) enterpriseId = body.enterprise_id;
+      if (Array.isArray(body.roles) && body.roles.length > 0) roles = body.roles;
+    }
+  } catch {
+    /* fall back to guest */
+  }
+
+  api.accessToken.setCustomClaim(`${ns}/email`, email);
+  api.idToken.setCustomClaim(`${ns}/email`, email);
+  api.accessToken.setCustomClaim(`${ns}/roles`, roles);
+  api.idToken.setCustomClaim(`${ns}/roles`, roles);
+  if (enterpriseId) {
+    api.accessToken.setCustomClaim(`${ns}/enterprise_id`, enterpriseId);
+    api.idToken.setCustomClaim(`${ns}/enterprise_id`, enterpriseId);
+  }
+};
+```
+
+Action secrets: **`INVENTORY_CLAIMS_URL`** (gateway or inventory public URL + `/v1/inventory/internal/staff/claims`), **`ACTION_CLAIMS_SECRET`**.
+
+### Legacy Action (interim demo only)
+
+Demo enterprise id: `eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee` (Palladium Lodging Group).
+
+```javascript
+exports.onExecutePostLogin = async (event, api) => {
+  const ns = "https://hospitality.app/claims";
   const ENTERPRISE_ID = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
-
   const assigned =
     event.authorization?.roles?.map((role) => role.name).filter(Boolean) ?? [];
   const roles = assigned.length > 0 ? assigned : ["guest"];
-
   api.accessToken.setCustomClaim(`${ns}/enterprise_id`, ENTERPRISE_ID);
   api.accessToken.setCustomClaim(`${ns}/roles`, roles);
-
   if (event.user.email) {
     api.accessToken.setCustomClaim(`${ns}/email`, event.user.email);
   }
-
   api.idToken.setCustomClaim(`${ns}/enterprise_id`, ENTERPRISE_ID);
   api.idToken.setCustomClaim(`${ns}/roles`, roles);
   if (event.user.email) {
@@ -110,7 +157,9 @@ exports.onExecutePostLogin = async (event, api) => {
 };
 ```
 
-Add the Action to the **Login** flow. The SPA requests scope **`openid profile email`** and passes **`chain_code`** when signing in from a brand page (`/c/HBR`).
+Add the Action to the **Login** flow. The SPA requests scope **`openid profile email`**.
+
+**Staff brand access (database)** — see **[`docs/AUTHORIZATION.md`](docs/AUTHORIZATION.md)**. Per-brand scope lives in Supabase ([`0018_staff_brand_access.sql`](supabase/migrations/0018_staff_brand_access.sql)). After **9B**, managers use **invite** in the Enterprise Admin Portal; until then use **`/v1/inventory/admin/staff`** or SQL. Guests are never restricted by brand — only by email on their reservations.
 
 **Credentials Exchange Action (M2M)** — set **`enterprise_id`** only; register the client in **`inventory.integration_client`** with brand grants (same model as staff). M2M tokens without a roles claim keep legacy full API access at the gateway.
 
@@ -126,10 +175,10 @@ The deployed gateway must include the **`guest`** role map — otherwise tokens 
 
 **Quick JWT check:** decode the access token at [jwt.io](https://jwt.io) and confirm:
 
-- `https://hospitality.app/claims/enterprise_id` — enterprise UUID (PLG seed: `eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee`)
-- `https://hospitality.app/claims/roles` — `["guest"]` for users with no Auth0 role
 - `https://hospitality.app/claims/email` — login email (required for guest “my reservations”)
-- JWT **`sub`** — used with **`inventory.staff_member`** for brand scope (staff only)
+- `https://hospitality.app/claims/roles` — `["guest"]` for users without a staff row; staff roles from **`intended_role`** after **9B**
+- `https://hospitality.app/claims/enterprise_id` — present for staff; PLG demo interim: `eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee`
+- JWT **`sub`** — linked to **`inventory.staff_member`** on invite accept (**9B**)
 
 Legacy tokens may still include **`chain_id`** / **`chain_ids`** UUID claims; the gateway accepts those when **`enterprise_id`** is absent.
 
