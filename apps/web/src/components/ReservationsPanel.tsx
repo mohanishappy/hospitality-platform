@@ -2,11 +2,13 @@ import { useAuth0 } from "@auth0/auth0-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchHotels,
+  fetchMyChains,
   getReservation,
   listReservations,
   patchReservationNotes,
   patchReservationStatus,
   type CancellationReason,
+  type ChainSummary,
   type HotelSummary,
   type ReservationDetail,
   type ReservationListItem,
@@ -14,12 +16,17 @@ import {
 import { useAccessClaims } from "../hooks/useAccessClaims";
 import { useGatewayToken } from "../hooks/useGatewayToken";
 import { formatMoney } from "../lib/format";
+import { formatHotelLabel, hotelOptionLabel } from "../lib/hotelLabel";
 
 type Props = {
   gatewayUrl: string;
   audience: string;
   /** Guest-facing title and simplified filters. */
   guestMode?: boolean;
+  /** Brand path — sets active chain for booking-scoped API calls. */
+  chainCode?: string;
+  /** Initial chain filter: chain UUID or "all". */
+  defaultChainFilter?: "all" | string;
 };
 
 const CANCEL_REASONS: { value: CancellationReason; label: string }[] = [
@@ -36,25 +43,23 @@ function statusClass(status: ReservationDetail["status"]): string {
   return "muted";
 }
 
-function hotelLabel(
-  hotelId: string | undefined,
-  hotelNames: Map<string, string>
-): string {
-  if (!hotelId) return "Unknown hotel";
-  return hotelNames.get(hotelId) ?? hotelId.slice(0, 8);
-}
-
 export function ReservationsPanel({
   gatewayUrl,
   audience,
   guestMode = false,
+  chainCode,
+  defaultChainFilter = "all",
 }: Props) {
   const { isAuthenticated } = useAuth0();
-  const { can, isManager } = useAccessClaims();
+  const { can, isManager, isMultiChain, chainIds } = useAccessClaims();
   const getToken = useGatewayToken(audience);
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
 
+  const [chains, setChains] = useState<ChainSummary[]>([]);
+  const [chainFilter, setChainFilter] = useState<string>(
+    defaultChainFilter === "all" ? "" : defaultChainFilter
+  );
   const [hotels, setHotels] = useState<HotelSummary[]>([]);
   const [statusFilter, setStatusFilter] = useState<
     "" | ReservationDetail["status"]
@@ -76,11 +81,41 @@ export function ReservationsPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const hotelNames = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const h of hotels) map.set(h.id, h.name);
+  const showChainLabels = isMultiChain && !chainFilter;
+
+  const hotelMap = useMemo(() => {
+    const map = new Map<string, HotelSummary>();
+    for (const h of hotels) map.set(h.id, h);
     return map;
   }, [hotels]);
+
+  useEffect(() => {
+    if (defaultChainFilter === "all") {
+      setChainFilter("");
+      return;
+    }
+    setChainFilter(defaultChainFilter);
+  }, [defaultChainFilter]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !isMultiChain || !chainIds?.length) {
+      setChains([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getTokenRef.current();
+        const data = await fetchMyChains(gatewayUrl, token);
+        if (!cancelled) setChains(data.chains ?? []);
+      } catch {
+        if (!cancelled) setChains([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [gatewayUrl, isAuthenticated, isMultiChain]);
 
   const loadList = useCallback(
     async (nextOffset: number, append: boolean) => {
@@ -88,11 +123,17 @@ export function ReservationsPanel({
       setError(null);
       try {
         const token = await getTokenRef.current();
-        const data = await listReservations(gatewayUrl, token, {
-          offset: nextOffset,
-          status: statusFilter || undefined,
-          hotelId: hotelFilter || undefined,
-        });
+        const data = await listReservations(
+          gatewayUrl,
+          token,
+          {
+            offset: nextOffset,
+            status: statusFilter || undefined,
+            hotelId: hotelFilter || undefined,
+            chainId: chainFilter || undefined,
+          },
+          chainCode
+        );
         setRows((prev) =>
           append
             ? [...prev, ...(data.reservations ?? [])]
@@ -106,7 +147,7 @@ export function ReservationsPanel({
         setBusy(false);
       }
     },
-    [gatewayUrl, hotelFilter, statusFilter]
+    [chainCode, chainFilter, gatewayUrl, hotelFilter, statusFilter]
   );
 
   const loadDetail = useCallback(
@@ -115,7 +156,12 @@ export function ReservationsPanel({
       setError(null);
       try {
         const token = await getTokenRef.current();
-        const result = await getReservation(gatewayUrl, token, reservationId);
+        const result = await getReservation(
+          gatewayUrl,
+          token,
+          reservationId,
+          chainCode
+        );
         const reservation = result.body.reservation;
         setDetail(reservation);
         setEtag(result.etag);
@@ -128,7 +174,7 @@ export function ReservationsPanel({
         setBusy(false);
       }
     },
-    [gatewayUrl]
+    [chainCode, gatewayUrl]
   );
 
   useEffect(() => {
@@ -144,7 +190,7 @@ export function ReservationsPanel({
     (async () => {
       try {
         const token = await getTokenRef.current();
-        const data = await fetchHotels(gatewayUrl, token);
+        const data = await fetchHotels(gatewayUrl, token, chainCode);
         if (!cancelled) setHotels(data.hotels ?? []);
       } catch {
         /* hotels optional for filters */
@@ -155,7 +201,7 @@ export function ReservationsPanel({
     return () => {
       cancelled = true;
     };
-  }, [gatewayUrl, isAuthenticated, loadList]);
+  }, [chainCode, gatewayUrl, isAuthenticated, loadList]);
 
   const applyDetail = (reservation: ReservationDetail, nextEtag: string | null) => {
     setDetail(reservation);
@@ -184,7 +230,8 @@ export function ReservationsPanel({
         token,
         selectedId,
         body,
-        etag
+        etag,
+        chainCode
       );
       applyDetail(result.body.reservation, result.etag);
     } catch (err) {
@@ -210,7 +257,8 @@ export function ReservationsPanel({
         token,
         selectedId,
         body,
-        etag
+        etag,
+        chainCode
       );
       applyDetail(result.body.reservation, result.etag);
     } catch (err) {
@@ -241,6 +289,22 @@ export function ReservationsPanel({
       </div>
 
       <div className="reservations-filters">
+        {isMultiChain && (
+          <label>
+            Brand
+            <select
+              value={chainFilter}
+              onChange={(e) => setChainFilter(e.target.value)}
+            >
+              <option value="">All brands</option>
+              {chains.map((chain) => (
+                <option key={chain.id} value={chain.id}>
+                  {chain.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label>
           Status
           <select
@@ -265,7 +329,7 @@ export function ReservationsPanel({
               <option value="">All hotels</option>
               {hotels.map((hotel) => (
                 <option key={hotel.id} value={hotel.id}>
-                  {hotel.name}
+                  {hotelOptionLabel(hotel, showChainLabels)}
                 </option>
               ))}
             </select>
@@ -306,7 +370,7 @@ export function ReservationsPanel({
                       </strong>
                       <span className="muted">
                         {" "}
-                        · {hotelLabel(row.hotel_id, hotelNames)}
+                        · {formatHotelLabel(row.hotel_id, hotelMap, showChainLabels)}
                       </span>
                     </span>
                     <span className={`reservation-status ${statusClass(row.status)}`}>
@@ -351,7 +415,9 @@ export function ReservationsPanel({
               </div>
               <div>
                 <dt>Hotel</dt>
-                <dd>{hotelLabel(detail.hotel_id, hotelNames)}</dd>
+                <dd>
+                  {formatHotelLabel(detail.hotel_id, hotelMap, showChainLabels)}
+                </dd>
               </div>
               {detail.guest && (
                 <div>

@@ -27,17 +27,20 @@ export function guestScopeFromHeaders(headers: {
 
 export async function reservationOwnedByGuestEmail(
   supa: SupabaseClient,
-  chainId: string,
+  allowedChainIds: string[],
   reservationId: string,
   userEmail: string
 ): Promise<boolean> {
-  const { data, error } = await supa
+  let q = supa
     .schema("reservations")
     .from("reservation_stub")
-    .select("id, guest(email)")
-    .eq("id", reservationId.trim())
-    .eq("chain_id", chainId)
-    .maybeSingle();
+    .select("id, chain_id, guest(email)")
+    .eq("id", reservationId.trim());
+  q =
+    allowedChainIds.length === 1
+      ? q.eq("chain_id", allowedChainIds[0])
+      : q.in("chain_id", allowedChainIds);
+  const { data, error } = await q.maybeSingle();
   if (error || !data) return false;
   const guest = (data as { guest?: { email?: string } | null }).guest;
   const email = guest?.email?.trim().toLowerCase();

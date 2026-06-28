@@ -12,6 +12,8 @@ export type HotelSummary = {
   name: string;
   code: string;
   chain_id: string;
+  chain_name?: string;
+  chain_code?: string;
 };
 
 export type HotelsResponse = {
@@ -109,7 +111,9 @@ export type ReservationDetail = {
   } | null;
 };
 
-export type ReservationListItem = Omit<ReservationDetail, "guest">;
+export type ReservationListItem = Omit<ReservationDetail, "guest"> & {
+  chain_id?: string;
+};
 
 export type CancellationReason =
   | "guest_request"
@@ -166,6 +170,21 @@ export type ChainSummary = {
   id: string;
   code: string;
   name: string;
+  enterprise_id?: string;
+};
+
+export type EnterpriseSummary = {
+  id: string;
+  code: string;
+  name: string;
+};
+
+export type EnterprisesResponse = {
+  enterprises: EnterpriseSummary[];
+};
+
+export type EnterpriseResponse = {
+  enterprise: EnterpriseSummary;
 };
 
 export type ChainsResponse = {
@@ -177,14 +196,33 @@ export type ChainResponse = {
 };
 
 export type BookingAuth =
-  | { kind: "token"; accessToken: string }
+  | { kind: "token"; accessToken: string; chainCode?: string }
   | { kind: "chain"; chainCode: string };
 
 function bookingAuthHeaders(auth: BookingAuth): Record<string, string> {
   if (auth.kind === "token") {
-    return { Authorization: `Bearer ${auth.accessToken}` };
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${auth.accessToken}`,
+    };
+    if (auth.chainCode?.trim()) {
+      headers["x-chain-code"] = auth.chainCode.trim().toUpperCase();
+    }
+    return headers;
   }
   return { "x-chain-code": auth.chainCode.trim().toUpperCase() };
+}
+
+export function tokenAuthHeaders(
+  accessToken: string,
+  chainCode?: string
+): Record<string, string> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${accessToken}`,
+  };
+  if (chainCode?.trim()) {
+    headers["x-chain-code"] = chainCode.trim().toUpperCase();
+  }
+  return headers;
 }
 
 export class GatewayError extends Error {
@@ -267,14 +305,43 @@ export function fetchReadiness(gatewayUrl: string) {
 
 export function fetchHotels(
   gatewayUrl: string,
-  auth: BookingAuth | string
+  auth: BookingAuth | string,
+  chainCode?: string
 ) {
   const headers =
     typeof auth === "string"
-      ? { Authorization: `Bearer ${auth}` }
+      ? tokenAuthHeaders(auth, chainCode)
       : bookingAuthHeaders(auth);
   return gatewayFetch<HotelsResponse>(gatewayUrl, "/v1/inventory/hotels", {
     headers,
+  });
+}
+
+export function fetchEnterprises(gatewayUrl: string) {
+  return gatewayFetch<EnterprisesResponse>(
+    gatewayUrl,
+    "/v1/inventory/enterprises"
+  );
+}
+
+export function fetchEnterpriseByCode(gatewayUrl: string, enterpriseCode: string) {
+  return gatewayFetch<EnterpriseResponse>(
+    gatewayUrl,
+    `/v1/inventory/enterprises/${encodeURIComponent(enterpriseCode.trim().toUpperCase())}`
+  );
+}
+
+export function fetchEnterpriseChains(gatewayUrl: string, enterpriseCode: string) {
+  return gatewayFetch<ChainsResponse>(
+    gatewayUrl,
+    `/v1/inventory/enterprises/${encodeURIComponent(enterpriseCode.trim().toUpperCase())}/chains`
+  );
+}
+
+/** Chains the authenticated user may access (gateway-resolved scope). */
+export function fetchMyChains(gatewayUrl: string, accessToken: string) {
+  return gatewayFetch<ChainsResponse>(gatewayUrl, "/v1/inventory/me/chains", {
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
 }
 
@@ -369,12 +436,13 @@ export function createReservation(
 export function fetchRoomTypes(
   gatewayUrl: string,
   accessToken: string,
-  hotelId: string
+  hotelId: string,
+  chainCode?: string
 ) {
   return gatewayFetch<RoomTypesResponse>(
     gatewayUrl,
     `/v1/inventory/hotels/${hotelId}/room-types`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
+    { headers: tokenAuthHeaders(accessToken, chainCode) }
   );
 }
 
@@ -386,13 +454,14 @@ export function fetchCalendar(
     roomTypeId: string;
     from: string;
     to: string;
-  }
+  },
+  chainCode?: string
 ) {
   const qs = new URLSearchParams({ from: params.from, to: params.to });
   return gatewayFetch<CalendarResponse>(
     gatewayUrl,
     `/v1/inventory/hotels/${params.hotelId}/room-types/${params.roomTypeId}/calendar?${qs.toString()}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
+    { headers: tokenAuthHeaders(accessToken, chainCode) }
   );
 }
 
@@ -404,7 +473,9 @@ export function listReservations(
     offset?: number;
     status?: ReservationDetail["status"];
     hotelId?: string;
-  } = {}
+    chainId?: string;
+  } = {},
+  chainCode?: string
 ) {
   const qs = new URLSearchParams({
     limit: String(params.limit ?? 20),
@@ -412,22 +483,24 @@ export function listReservations(
   });
   if (params.status) qs.set("status", params.status);
   if (params.hotelId) qs.set("hotel_id", params.hotelId);
+  if (params.chainId) qs.set("chain_id", params.chainId);
   return gatewayFetch<ReservationsListResponse>(
     gatewayUrl,
     `/v1/reservations?${qs.toString()}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
+    { headers: tokenAuthHeaders(accessToken, chainCode) }
   );
 }
 
 export function getReservation(
   gatewayUrl: string,
   accessToken: string,
-  reservationId: string
+  reservationId: string,
+  chainCode?: string
 ) {
   return gatewayRequest<ReservationResponse>(
     gatewayUrl,
     `/v1/reservations/${reservationId}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
+    { headers: tokenAuthHeaders(accessToken, chainCode) }
   );
 }
 
@@ -439,10 +512,11 @@ export function patchReservationStatus(
     status: ReservationDetail["status"];
     cancellation_reason?: CancellationReason;
   },
-  ifMatch?: string | null
+  ifMatch?: string | null,
+  chainCode?: string
 ) {
   const headers: Record<string, string> = {
-    Authorization: `Bearer ${accessToken}`,
+    ...tokenAuthHeaders(accessToken, chainCode),
     "Content-Type": "application/json",
   };
   if (ifMatch) headers["If-Match"] = ifMatch;
@@ -458,10 +532,11 @@ export function patchReservationNotes(
   accessToken: string,
   reservationId: string,
   body: { internal_note?: string | null; guest_note?: string | null },
-  ifMatch?: string | null
+  ifMatch?: string | null,
+  chainCode?: string
 ) {
   const headers: Record<string, string> = {
-    Authorization: `Bearer ${accessToken}`,
+    ...tokenAuthHeaders(accessToken, chainCode),
     "Content-Type": "application/json",
   };
   if (ifMatch) headers["If-Match"] = ifMatch;

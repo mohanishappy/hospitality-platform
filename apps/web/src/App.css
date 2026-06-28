@@ -79,6 +79,50 @@
   gap: 0.75rem;
 }
 
+.enterprise-group {
+  margin-bottom: 2rem;
+}
+
+.enterprise-group:last-child {
+  margin-bottom: 0;
+}
+
+.enterprise-group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.enterprise-group-head h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.enterprise-group-head h2 a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.enterprise-group-head h2 a:hover {
+  opacity: 0.85;
+}
+
+.enterprise-hub-link {
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+.enterprise-hub-link:hover {
+  text-decoration: underline;
+}
+
+.section-title {
+  margin: 0 0 1rem;
+  font-size: 1.05rem;
+}
+
 @media (min-width: 560px) {
   .brand-list {
     grid-template-columns: 1fr 1fr;

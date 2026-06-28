@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
-import { fetchChains, type ChainSummary } from "../api/gateway";
-import { chainPath } from "../lib/chainPath";
+import {
+  fetchEnterpriseChains,
+  fetchEnterprises,
+  type ChainSummary,
+  type EnterpriseSummary,
+} from "../api/gateway";
+import { chainPath, enterprisePath } from "../lib/tenantPath";
 import type { AppConfig } from "../config";
 import { SiteFooter } from "./SiteFooter";
 
@@ -8,9 +13,14 @@ type Props = {
   config: AppConfig;
 };
 
+type EnterpriseGroup = {
+  enterprise: EnterpriseSummary;
+  chains: ChainSummary[];
+};
+
 type LoadState =
   | { kind: "loading" }
-  | { kind: "ok"; chains: ChainSummary[] }
+  | { kind: "ok"; groups: EnterpriseGroup[] }
   | { kind: "error"; message: string };
 
 export function HomePage({ config }: Props) {
@@ -18,20 +28,32 @@ export function HomePage({ config }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    void fetchChains(config.gatewayUrl)
-      .then((data) => {
-        if (!cancelled) {
-          setState({ kind: "ok", chains: data.chains ?? [] });
-        }
-      })
-      .catch((err) => {
+    (async () => {
+      try {
+        const entData = await fetchEnterprises(config.gatewayUrl);
+        const enterprises = entData.enterprises ?? [];
+        const groups = await Promise.all(
+          enterprises.map(async (enterprise) => {
+            const chainData = await fetchEnterpriseChains(
+              config.gatewayUrl,
+              enterprise.code
+            );
+            return {
+              enterprise,
+              chains: chainData.chains ?? [],
+            };
+          })
+        );
+        if (!cancelled) setState({ kind: "ok", groups });
+      } catch (err) {
         if (!cancelled) {
           setState({
             kind: "error",
-            message: err instanceof Error ? err.message : "Failed to load brands",
+            message: err instanceof Error ? err.message : "Failed to load",
           });
         }
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
@@ -49,28 +71,45 @@ export function HomePage({ config }: Props) {
         <section className="brand-hero">
           <h1>Where would you like to stay?</h1>
           <p className="lede">
-            Choose a hotel group to check availability and reserve your room.
+            Browse our hotel groups and brands to check availability and reserve
+            your room.
           </p>
         </section>
 
         <section className="panel panel-wide brand-picker">
           {state.kind === "loading" && <p className="muted">Loading…</p>}
           {state.kind === "error" && <p className="error">{state.message}</p>}
-          {state.kind === "ok" && state.chains.length === 0 && (
+          {state.kind === "ok" && state.groups.length === 0 && (
             <p className="muted">No properties available right now.</p>
           )}
-          {state.kind === "ok" && state.chains.length > 0 && (
-            <ul className="brand-list">
-              {state.chains.map((chain) => (
-                <li key={chain.id}>
-                  <a href={chainPath(chain.code)} className="brand-card">
-                    <strong>{chain.name}</strong>
-                    <span className="muted">View availability →</span>
+          {state.kind === "ok" &&
+            state.groups.map((group) => (
+              <div key={group.enterprise.id} className="enterprise-group">
+                <div className="enterprise-group-head">
+                  <h2>
+                    <a href={enterprisePath(group.enterprise.code)}>
+                      {group.enterprise.name}
+                    </a>
+                  </h2>
+                  <a
+                    href={enterprisePath(group.enterprise.code)}
+                    className="muted enterprise-hub-link"
+                  >
+                    Enterprise hub →
                   </a>
-                </li>
-              ))}
-            </ul>
-          )}
+                </div>
+                <ul className="brand-list">
+                  {group.chains.map((chain) => (
+                    <li key={chain.id}>
+                      <a href={chainPath(chain.code)} className="brand-card">
+                        <strong>{chain.name}</strong>
+                        <span className="muted">View availability →</span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
         </section>
       </main>
 

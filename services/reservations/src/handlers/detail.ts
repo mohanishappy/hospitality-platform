@@ -1,5 +1,6 @@
 import type { Context } from "hono";
 import type { Env } from "../types";
+import { requireAllowedChainIds, reservationInScope } from "../chain-scope";
 import { normalizeRowVersion, weakEtag } from "../etag";
 import {
   guestScopeFromHeaders,
@@ -12,10 +13,10 @@ import { RESERVATION_DETAIL_SELECT } from "../selects";
 import { supaClient } from "../supabase";
 
 export async function getReservation(c: Context<{ Bindings: Env }>) {
-  const chainId = c.req.header("x-chain-id");
-  if (!chainId) {
-    return problem(401, "Unauthorized", "Missing x-chain-id");
-  }
+  const scopeResult = requireAllowedChainIds(c);
+  if (!scopeResult.ok) return scopeResult.response;
+  const allowedChainIds = scopeResult.ids;
+
   const id = c.req.param("id");
   if (!id?.trim()) {
     return problem(400, "Bad Request", "Reservation id required");
@@ -41,12 +42,11 @@ export async function getReservation(c: Context<{ Bindings: Env }>) {
     .from("reservation_stub")
     .select(RESERVATION_DETAIL_SELECT)
     .eq("id", id.trim())
-    .eq("chain_id", chainId)
     .maybeSingle();
   if (error) {
     return problem(500, "Database error", error.message);
   }
-  if (!data) {
+  if (!data || !reservationInScope(data.chain_id, allowedChainIds)) {
     return problem(404, "Not Found", "Reservation not found for this chain");
   }
   if (
@@ -54,7 +54,7 @@ export async function getReservation(c: Context<{ Bindings: Env }>) {
     scope.userEmail &&
     !(await reservationOwnedByGuestEmail(
       supa,
-      chainId,
+      allowedChainIds,
       id.trim(),
       scope.userEmail
     ))

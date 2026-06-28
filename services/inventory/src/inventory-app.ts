@@ -4,13 +4,36 @@ import { getRoomTypeAvailability } from "./handlers/availability";
 import { getRoomTypeCalendar } from "./handlers/calendar";
 import { getHotel } from "./handlers/hotel-detail";
 import { getChainByCode, listChains } from "./handlers/chains";
+import {
+  getEnterpriseByCode,
+  listEnterpriseChains,
+  listEnterpriseChainsById,
+  listEnterprises,
+} from "./handlers/enterprises";
 import { listHotels } from "./handlers/hotels";
 import { listRoomTypes } from "./handlers/room-types";
 import { searchStays } from "./handlers/search";
 import { createSoftHold, releaseSoftHold } from "./handlers/soft-holds";
+import {
+  createAdminStaff,
+  listAdminStaff,
+  patchAdminStaff,
+  putAdminStaffChains,
+} from "./handlers/admin-staff";
+import { getMyChains, getStaffAccess } from "./handlers/staff-access";
 
 export function inventoryApp() {
   const r = new Hono<{ Bindings: Env }>();
+  r.get("/enterprises", listEnterprises);
+  r.get("/enterprises/by-id/:enterpriseId/chains", listEnterpriseChainsById);
+  r.get("/enterprises/:code", getEnterpriseByCode);
+  r.get("/enterprises/:code/chains", listEnterpriseChains);
+  r.get("/staff/access", getStaffAccess);
+  r.get("/me/chains", getMyChains);
+  r.get("/admin/staff", listAdminStaff);
+  r.post("/admin/staff", createAdminStaff);
+  r.patch("/admin/staff/:id", patchAdminStaff);
+  r.put("/admin/staff/:id/chains", putAdminStaffChains);
   r.get("/chains", listChains);
   r.get("/chains/:code", getChainByCode);
   r.get("/search", searchStays);

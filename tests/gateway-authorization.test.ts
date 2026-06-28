@@ -84,6 +84,24 @@ describe("requiredPermissions", () => {
       requiredPermissions("PATCH", `/v1/reservations/${id}/notes`)
     ).toEqual(["reservations:notes"]);
   });
+
+  it("maps admin staff routes to staff:admin", () => {
+    expect(requiredPermissions("GET", "/v1/inventory/admin/staff")).toEqual([
+      "staff:admin",
+    ]);
+    expect(
+      requiredPermissions("POST", "/v1/inventory/admin/staff")
+    ).toEqual(["staff:admin"]);
+    expect(
+      requiredPermissions("PUT", `/v1/inventory/admin/staff/${id}/chains`)
+    ).toEqual(["staff:admin"]);
+  });
+
+  it("maps me/chains to inventory:read", () => {
+    expect(requiredPermissions("GET", "/v1/inventory/me/chains")).toEqual([
+      "inventory:read",
+    ]);
+  });
 });
 
 describe("effectivePermissions", () => {
@@ -129,6 +147,12 @@ describe("effectivePermissions", () => {
   it("allows manager to cancel", () => {
     const perms = effectivePermissions({ sub: "u" }, ["manager"]);
     expect(hasPermission(perms, ["reservations:cancel"])).toBe(true);
+    expect(hasPermission(perms, ["staff:admin"])).toBe(true);
+  });
+
+  it("denies front_desk staff admin", () => {
+    const perms = effectivePermissions({ sub: "u" }, ["front_desk"]);
+    expect(hasPermission(perms, ["staff:admin"])).toBe(false);
   });
 
   it("allows front_desk to cancel", () => {

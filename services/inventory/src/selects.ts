@@ -1,5 +1,8 @@
 export const HOTEL_LIST_SELECT = "id,name,code,chain_id";
 
+export const HOTEL_LIST_WITH_CHAIN_SELECT =
+  "id,name,code,chain_id, chain:chain_id ( name, code )";
+
 export const HOTEL_DETAIL_SELECT = "id,name,code,chain_id,created_at";
 
 export const ROOM_TYPE_LIST_SELECT =

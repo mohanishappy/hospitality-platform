@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "a1b2c3d4-hosp-0001-gateway",
     "name": "Hospitality Platform — Gateway API",
-    "description": "Calls the **gateway** only (inventory + reservations).\n\n**Setup:** import the example environment, set `baseUrl` and `access_token` (Auth0 access token with your API `aud` and claim `https://hospitality.app/claims/chain_id`). Run **GET List hotels** then **GET Room types** so **collection** variables `hotel_id` / `room_type_id` fill in (or set them manually on the collection).\n\n**Phase 4 inventory:** **GET Search stays** (`/v1/inventory/search`), **GET Room type calendar** (`…/calendar?from=&to=`). Optional **`rate_plan_code`** / **`promotion_code`** on availability, search, and **POST Create** (migration **0014**; DEMO seed: **LOS3** for 3+ nights, **SAVE5** for 5% off).\n\n**Phase 5:** **POST Create soft hold** / **DELETE Release soft hold** (migration **0015**); **GET Reservation** saves **`reservation_etag`** for optional **`If-Match`** on **PATCH** (**412** if stale).\n\n**Phase 6:** optional **`cancellation_reason`** on **PATCH Cancel**; **`PATCH Reservation notes`** for **`guest_note`** / **`internal_note`** (migration **0016**). Optional claim **`https://hospitality.app/claims/roles`** (`read_only`, `front_desk`, `manager`, `integration`) — tokens **without** roles keep full access.\n\n**Variables:** Postman resolves **environment** before **collection** for the same name. Empty strings in the environment **override** collection values — the example env only defines `baseUrl`, `access_token`, `check_in`, and `check_out` so ids from tests are not shadowed. To pin `hotel_id` in the environment, add the key with a **real UUID** (never an empty placeholder).\n\n**Conventions:** folders group by domain; auth is inherited (Bearer on protected folders). Health uses `noauth`. Suggested reservation flow: **Create** → **GET** → **Guest** → **Notes** → **Confirm** → **Cancel**.",
+    "description": "Calls the **gateway** only (inventory + reservations).\n\n**Setup:** import the example environment, set `baseUrl` and `access_token` (Auth0 access token with your API `aud` and claim **`https://hospitality.app/claims/enterprise_id`** — PLG demo: `eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee`). Staff also need a row in **`inventory.staff_member`** keyed by JWT **`sub`** (see **`docs/AUTHORIZATION.md`**). Run **GET List hotels** then **GET Room types** so **collection** variables `hotel_id` / `room_type_id` fill in.\n\n**Multi-brand (0017–0018):** optional **`chain_code`** collection var (e.g. **`HBR`**) — collection pre-request adds **`x-chain-code`** on every request when set. Public catalog: **GET List enterprises** / **GET Enterprise chains** (no auth). Authenticated: **GET My chains**, optional **`chain_id`** on **GET List reservations**. Managers: **01 — Admin staff** folder (**`staff:admin`**).\n\n**Phase 4 inventory:** **GET Search stays**, **GET Room type calendar**. Optional **`rate_plan_code`** / **`promotion_code`** (DEMO **LOS3**, **SAVE5**).\n\n**Phase 5:** soft holds (**0015**); **GET Reservation** saves **`reservation_etag`** for **`If-Match`** on **PATCH**.\n\n**Phase 6:** **`cancellation_reason`** on cancel; reservation notes (**0016**). Claim **`https://hospitality.app/claims/roles`**: `guest`, `front_desk`, `manager`, `read_only`, `integration`. Legacy tokens with **`chain_id`** only still work when **`enterprise_id`** is absent.\n\n**Variables:** environment overrides collection for the same name — example env only defines `baseUrl`, `access_token`, `check_in`, `check_out`.\n\n**Conventions:** folders by domain; Bearer on protected folders; **00 — Public** uses `noauth`. Reservation flow: **Create** → **GET** → **Guest** → **Notes** → **Confirm** → **Cancel**.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -77,6 +77,44 @@
       "key": "cancellation_reason",
       "value": "guest_request",
       "description": "Optional on **PATCH Cancel**: guest_request | no_show | duplicate | rate_dispute | other (**FR-R9**)."
+    },
+    {
+      "key": "chain_code",
+      "value": "HBR",
+      "description": "Active brand code; collection pre-request sends **x-chain-code** when non-empty. Clear for enterprise-wide staff calls."
+    },
+    {
+      "key": "enterprise_code",
+      "value": "PLG",
+      "description": "Enterprise catalog code (Palladium Lodging Group demo)."
+    },
+    {
+      "key": "chain_id",
+      "value": "",
+      "description": "Optional brand UUID filter on **GET List reservations**; **GET My chains** may set first chain id."
+    },
+    {
+      "key": "staff_member_id",
+      "value": "",
+      "description": "Set by **POST Create staff member** or manually for admin PATCH/PUT."
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "function __t(v) {",
+          "    if (v === undefined || v === null) return '';",
+          "    return String(v).trim();",
+          "}",
+          "const cc = __t(pm.variables.get('chain_code'));",
+          "if (cc) {",
+          "    pm.request.headers.upsert({ key: 'x-chain-code', value: cc.toUpperCase() });",
+          "}"
+        ]
+      }
     }
   ],
   "item": [
@@ -95,9 +133,74 @@
             "description": "No `Authorization` header. Confirms gateway is reachable."
           },
           "response": []
+        },
+        {
+          "name": "GET List enterprises",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/inventory/enterprises",
+            "description": "Public catalog (**0017**). No Bearer required."
+          },
+          "response": []
+        },
+        {
+          "name": "GET Enterprise by code",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/inventory/enterprises/{{enterprise_code}}",
+            "description": "Single enterprise by code (e.g. **PLG**). No auth."
+          },
+          "response": []
+        },
+        {
+          "name": "GET Enterprise chains",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/inventory/enterprises/{{enterprise_code}}/chains",
+            "description": "Brands under an enterprise (DEMO, HBR, NWE, VCB for PLG). No auth."
+          },
+          "response": []
+        },
+        {
+          "name": "GET List chains",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/inventory/chains",
+            "description": "All brands (legacy public catalog)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET Chain by code",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/inventory/chains/{{chain_code}}",
+            "description": "Single brand metadata by code (uses **`chain_code`** var, default **HBR**)."
+          },
+          "response": []
         }
       ],
-      "description": "Unauthenticated smoke checks."
+      "description": "Unauthenticated smoke checks and public catalog."
     },
     {
       "name": "01 — Inventory",
@@ -112,6 +215,36 @@
         ]
       },
       "item": [
+        {
+          "name": "GET My chains",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const j = pm.response.json();",
+                  "    if (j.chains && j.chains[0] && j.chains[0].id) {",
+                  "        const id = j.chains[0].id;",
+                  "        pm.collectionVariables.set('chain_id', id);",
+                  "        if (pm.environment.name) {",
+                  "            pm.environment.set('chain_id', id);",
+                  "        }",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/inventory/me/chains",
+            "description": "Brands the caller may access (gateway-resolved from JWT **`enterprise_id`** + **`inventory.staff_member`** grants). Guests see all enterprise brands. On **200**, saves first **`chain_id`** when present."
+          },
+          "response": []
+        },
         {
           "name": "GET List hotels",
           "event": [
@@ -138,7 +271,7 @@
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/v1/inventory/hotels",
-            "description": "Returns `hotels[]` for the JWT `chain_id`. On **200**, saves first hotel `id` to **collection** and to the **active environment** (if any) so `{{hotel_id}}` resolves correctly."
+            "description": "Returns `hotels[]` for allowed brand scope. With **`chain_code`** set, filters to that active brand via **`x-chain-code`**. On **200**, saves first hotel `id` to **collection** and **active environment**."
           },
           "response": []
         },
@@ -262,7 +395,110 @@
           "response": []
         }
       ],
-      "description": "Bearer token required; gateway injects `x-chain-id`."
+      "description": "Bearer token required; gateway resolves enterprise scope and injects **`x-chain-id`** / **`x-chain-ids`**. Optional **`chain_code`** → **`x-chain-code`** (collection pre-request)."
+    },
+    {
+      "name": "01 — Admin staff",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{access_token}}",
+            "type": "string"
+          }
+        ]
+      },
+      "item": [
+        {
+          "name": "GET List staff",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/inventory/admin/staff",
+            "description": "List provisioned staff for the token **`enterprise_id`**. Requires **manager** role (**`staff:admin`**). Clear **`chain_code`** if you want enterprise-wide admin context."
+          },
+          "response": []
+        },
+        {
+          "name": "POST Create staff member",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const j = pm.response.json();",
+                  "    const id = j && j.staff && j.staff.id;",
+                  "    if (id) {",
+                  "        pm.collectionVariables.set('staff_member_id', id);",
+                  "        if (pm.environment.name) {",
+                  "            pm.environment.set('staff_member_id', id);",
+                  "        }",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"frontdesk@example.com\",\n  \"auth0_sub\": \"auth0|REPLACE_WITH_JWT_SUB\",\n  \"display_name\": \"Front Desk Demo\",\n  \"all_chains\": false,\n  \"chain_ids\": [\n    \"a1111111-1111-4111-8111-111111111111\"\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/v1/inventory/admin/staff",
+            "description": "Provision staff (**manager** only). Set **`auth0_sub`** to the user's JWT **`sub`**. Either **`all_chains`: true** or non-empty **`chain_ids`** (Harborline demo UUID shown). Saves **`staff_member_id`** on **201**."
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH Update staff member",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"display_name\": \"Updated name\",\n  \"active\": true\n}"
+            },
+            "url": "{{baseUrl}}/v1/inventory/admin/staff/{{staff_member_id}}",
+            "description": "Partial update: **`email`**, **`display_name`**, **`active`**, **`all_chains`**. Requires **`staff_member_id`**."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT Replace staff brand grants",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chain_ids\": [\n    \"a1111111-1111-4111-8111-111111111111\"\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/v1/inventory/admin/staff/{{staff_member_id}}/chains",
+            "description": "Replace **`staff_chain_grant`** rows. Staff must have **`all_chains`: false**; use **PATCH** to set **`all_chains`: true** for corporate access."
+          },
+          "response": []
+        }
+      ],
+      "description": "Manager-only staff provisioning (**0018**). Token needs **`manager`** role and matching **`inventory.staff_member`** row. See **`docs/AUTHORIZATION.md`**."
     },
     {
       "name": "02 — Reservations",
@@ -282,8 +518,8 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{baseUrl}}/v1/reservations?limit=20&offset=0",
-            "description": "Newest first for the JWT `chain_id`. Optional query filters (**FR-R8**): **`status`**, **`hotel_id`**, **`stay_from`** + **`stay_to`** (both dates required for overlap). Response includes `has_more`. No embedded `guest` rows."
+            "url": "{{baseUrl}}/v1/reservations?limit=20&offset=0&chain_id={{chain_id}}",
+            "description": "Newest first across allowed brands (enterprise staff) or email-scoped (guest). Optional filters (**FR-R8**): **`status`**, **`hotel_id`**, **`chain_id`** (brand UUID — leave **`chain_id`** var empty for all brands), **`stay_from`** + **`stay_to`**. Response includes `has_more`. No embedded `guest` rows."
           },
           "response": []
         },
@@ -575,7 +811,7 @@
           "response": []
         }
       ],
-      "description": "Bearer + `Idempotency-Key` on creates. Suggested flow: **Create** → **GET** → **Guest** → **Notes** → **Confirm** → **Cancel**. Dates are **YYYY-MM-DD**; `check_out` must be after `check_in`."
+      "description": "Bearer + `Idempotency-Key` on creates. Optional **`chain_code`** → **`x-chain-code`** for active brand on writes. Suggested flow: **Create** → **GET** → **Guest** → **Notes** → **Confirm** → **Cancel**. Dates are **YYYY-MM-DD**; `check_out` must be after `check_in`."
     }
   ]
 }

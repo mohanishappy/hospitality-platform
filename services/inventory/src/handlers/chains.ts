@@ -12,7 +12,7 @@ export async function listChains(c: Context<{ Bindings: Env }>) {
   const { data, error } = await supa
     .schema("inventory")
     .from("chain")
-    .select("id,code,name")
+    .select("id,code,name,enterprise_id")
     .order("code");
   if (error) {
     return problem(500, "Database error", formatPostgrestError(error));
@@ -32,7 +32,7 @@ export async function getChainByCode(c: Context<{ Bindings: Env }>) {
   const { data, error } = await supa
     .schema("inventory")
     .from("chain")
-    .select("id,code,name")
+    .select("id,code,name,enterprise_id")
     .eq("code", raw.toUpperCase())
     .maybeSingle();
   if (error) {

@@ -95,7 +95,11 @@ export function BookingPanel({ gatewayUrl, audience, chainCode }: Props) {
 
   const resolveAuth = useCallback(async (): Promise<BookingAuth> => {
     if (isAuthenticated) {
-      return { kind: "token", accessToken: await getTokenRef.current() };
+      return {
+        kind: "token",
+        accessToken: await getTokenRef.current(),
+        chainCode,
+      };
     }
     return { kind: "chain", chainCode };
   }, [chainCode, isAuthenticated]);

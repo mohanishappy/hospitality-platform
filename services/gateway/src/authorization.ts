@@ -13,7 +13,8 @@ export type Permission =
   | "reservations:guest"
   | "reservations:confirm"
   | "reservations:cancel"
-  | "reservations:notes";
+  | "reservations:notes"
+  | "staff:admin";
 
 const ALL_PERMISSIONS: Permission[] = [
   "inventory:read",
@@ -24,6 +25,7 @@ const ALL_PERMISSIONS: Permission[] = [
   "reservations:confirm",
   "reservations:cancel",
   "reservations:notes",
+  "staff:admin",
 ];
 
 const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
@@ -105,6 +107,13 @@ export function requiredPermissions(
 ): Permission[] {
   const m = method.toUpperCase();
   if (path.startsWith("/v1/inventory")) {
+    if (path.startsWith("/v1/inventory/admin/staff")) {
+      if (m === "GET") return ["staff:admin"];
+      if (m === "POST" || m === "PATCH" || m === "PUT") return ["staff:admin"];
+    }
+    if (path === "/v1/inventory/me/chains" && m === "GET") {
+      return ["inventory:read"];
+    }
     if (m === "GET") return ["inventory:read"];
     if (path.includes("/soft-holds") && (m === "POST" || m === "DELETE")) {
       return ["inventory:write"];

@@ -16,7 +16,7 @@ This document captures **functional requirements** (FRs) for the gateway-backed 
 |----|-------------|
 | **FR-A1** | Clients integrate with the **gateway** only; inventory and reservation workers are internal (service bindings), not the public HTTP contract for external clients. |
 | **FR-A2** | Protected routes require a **Bearer** access token whose `aud` matches the configured Auth0 API (`AUTH0_AUDIENCE`). |
-| **FR-A3** | The token carries tenant identity in claim **`https://hospitality.app/claims/chain_id`** (UUID string). The gateway resolves `chain_id` and injects **`x-chain-id`** for workers. |
+| **FR-A3** | The token carries **`https://hospitality.app/claims/enterprise_id`**. The gateway loads allowed brand UUIDs from inventory (enterprise catalog + **`inventory.staff_member`** grants for staff) and injects **`x-chain-ids`** and active **`x-chain-id`**. Legacy tokens may still use **`chain_id`** / **`chain_ids`** when **`enterprise_id`** is absent. See [`docs/AUTHORIZATION.md`](AUTHORIZATION.md). |
 | **FR-A4** | Path and body identifiers (`hotel_id`, etc.) must belong to the token’s chain; wrong chain yields **404** (or equivalent) as implemented. |
 | **FR-A5** | **`GET /health`**, **`GET /health/ready`**, **`GET /openapi.json`**, and **`GET /docs`** are available without authentication. |
 | **FR-A6** | When the access token includes claim **`https://hospitality.app/claims/roles`**, the gateway enforces route policies (**`read_only`**, **`front_desk`**, **`manager`**, **`integration`**). Tokens **without** a roles claim retain full access (soft rollout). |

@@ -54,7 +54,7 @@ Top-right environment dropdown → choose **`Hospitality — example (local)`** 
 | Variable | Where | What to put |
 |----------|--------|-------------|
 | **`baseUrl`** | Environment | Gateway root only, no trailing slash, e.g. `https://hospitality-gateway.your-subdomain.workers.dev` |
-| **`access_token`** | Environment | Auth0 **access token** whose `aud` is your API identifier and that includes claim **`https://hospitality.app/claims/chain_id`** (UUID matching `inventory.chain` for this tenant) |
+| **`access_token`** | Environment | Auth0 **access token** whose `aud` is your API identifier and that includes claim **`https://hospitality.app/claims/enterprise_id`** (PLG demo: `eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee`). Staff also need a matching **`inventory.staff_member`** row keyed by JWT **`sub`**. Legacy tokens with **`chain_id`** only still work. |
 | **`check_in` / `check_out`** | Environment | `YYYY-MM-DD`; **`check_out`** must be **after** **`check_in`** |
 | **`hotel_id`** | Collection (default) | Filled by **GET List hotels** on success; or set manually on the collection. Optional: add to environment with a **real** UUID only — never `""`. |
 | **`room_type_id`** | Collection (default) | Filled by **GET Room types**; or set manually. Same rule as `hotel_id`. |
@@ -63,6 +63,10 @@ Top-right environment dropdown → choose **`Hospitality — example (local)`** 
 | **`rate_plan_code`** / **`promotion_code`** | Collection (optional) | Empty by default. Set to match **GET …/availability** when testing **0014** pricing (e.g. DEMO **LOS3** with 3+ nights, **SAVE5**). |
 | **`search_hotel_ids`** | Collection (optional) | Comma-separated hotel UUIDs for **GET Search stays**; leave blank to search the whole chain. |
 | **`calendar_from`** / **`calendar_to`** | Collection | Half-open **`[from, to)`** for **GET Room type calendar** (defaults: one month in the collection). |
+| **`chain_code`** | Collection (optional) | Active brand code (e.g. **`HBR`**). Collection pre-request sends **`x-chain-code`** when non-empty. Clear for enterprise-wide admin calls. |
+| **`enterprise_code`** | Collection (optional) | Enterprise catalog code for public routes (default **`PLG`**). |
+| **`chain_id`** | Collection (optional) | Brand UUID; optional filter on **GET List reservations**. **GET My chains** may set the first id. |
+| **`staff_member_id`** | Collection (optional) | Set by **POST Create staff member** for admin PATCH/PUT. |
 
 ### 5. Get an M2M access token (example)
 
@@ -79,14 +83,18 @@ Copy **`access_token`** from the JSON into Postman **`access_token`**.
 ### 6. Run requests in order
 
 1. **GET Health** — confirms `baseUrl`.
-2. **GET List hotels** — copy one hotel **`id`** → **`hotel_id`**. In Supabase (or metadata you keep), pick a **`room_type`** with that **`hotel_id`** → **`room_type_id`**.
-3. **GET Room type availability & quote** — optional **`rate_plan_code`** / **`promotion_code`** on the collection.
-4. **GET Search stays** / **GET Room type calendar** — after **0014**; calendar uses **`calendar_from`** / **`calendar_to`**.
-5. **POST Create reservation** — should return **201** (or **200** on replay). **`reservation_id`** is saved to the active environment when possible. Body includes the same optional codes as availability when testing priced bookings.
-6. **GET Reservation by id** — uses **`{{reservation_id}}`**; saves **`reservation_etag`**.
-7. **PATCH Guest contact** → **PATCH Reservation notes** → **PATCH Confirm** → **PATCH Cancel** (optional **`cancellation_reason`** on collection; **0016**+).
+2. **GET List enterprises** / **GET Enterprise chains** — public catalog (no token).
+3. **GET My chains** (authenticated) — brands you may access; may set **`chain_id`**.
+4. **GET List hotels** — copy one hotel **`id`** → **`hotel_id`**. Pick a **`room_type`** with that **`hotel_id`** → **`room_type_id`**.
+5. **GET Room type availability & quote** — optional **`rate_plan_code`** / **`promotion_code`** on the collection.
+6. **GET Search stays** / **GET Room type calendar** — after **0014**; calendar uses **`calendar_from`** / **`calendar_to`**.
+7. **POST Create reservation** — should return **201** (or **200** on replay). **`reservation_id`** is saved to the active environment when possible.
+8. **GET Reservation by id** — uses **`{{reservation_id}}`**; saves **`reservation_etag`**.
+9. **PATCH Guest contact** → **PATCH Reservation notes** → **PATCH Confirm** → **PATCH Cancel** (optional **`cancellation_reason`** on collection; **0016**+).
 
-**Roles (optional):** if your Auth0 Action adds **`https://hospitality.app/claims/roles`**, use **`manager`** for cancel + **`internal_note`**, **`front_desk`** for confirm/guest/notes (guest only). Tokens **without** a roles claim behave as today (full access).
+**Admin staff (manager):** **GET List staff** → **POST Create staff member** → **PATCH** / **PUT …/chains** as needed. See **`docs/AUTHORIZATION.md`**.
+
+**Roles (optional):** if your Auth0 Action adds **`https://hospitality.app/claims/roles`**, use **`manager`** for cancel, **`internal_note`**, and staff admin; **`front_desk`** for confirm/guest/notes (guest only). Tokens **without** a roles claim behave as today (full access for M2M; guest for SPA users).
 
 ---
 
@@ -101,13 +109,23 @@ Copy **`access_token`** from the JSON into Postman **`access_token`**.
 ## Requests (gateway only)
 
 - **GET** `/health` — no auth.
-- **GET** `/v1/inventory/hotels` — Bearer token (tests may set `hotel_id` from first row).
+- **GET** `/v1/inventory/enterprises` — no auth; enterprise catalog (**0017**).
+- **GET** `/v1/inventory/enterprises/:code` — no auth; e.g. `{{enterprise_code}}`.
+- **GET** `/v1/inventory/enterprises/:code/chains` — no auth; brands under an enterprise.
+- **GET** `/v1/inventory/chains` — no auth; all brands.
+- **GET** `/v1/inventory/chains/:code` — no auth; e.g. `{{chain_code}}`.
+- **GET** `/v1/inventory/me/chains` — Bearer; caller's allowed brands (**0018**).
+- **GET** `/v1/inventory/admin/staff` — Bearer + **manager**; list staff.
+- **POST** `/v1/inventory/admin/staff` — Bearer + **manager**; provision staff.
+- **PATCH** `/v1/inventory/admin/staff/:id` — Bearer + **manager**; update staff fields.
+- **PUT** `/v1/inventory/admin/staff/:id/chains` — Bearer + **manager**; replace brand grants.
+- **GET** `/v1/inventory/hotels` — Bearer token (optional **`x-chain-code`** via **`chain_code`** var); tests may set `hotel_id` from first row.
 - **GET** `/v1/inventory/hotels/:id` — Bearer; e.g. `{{hotel_id}}`.
 - **GET** `/v1/inventory/hotels/:hotelId/room-types` — Bearer; e.g. `{{hotel_id}}` (tests may set `room_type_id`).
 - **GET** `/v1/inventory/hotels/:hotelId/room-types/:roomTypeId/availability?check_in=&check_out=` — Bearer; quote + per-night bookability; optional `rate_plan_code`, `promotion_code` (uses `{{hotel_id}}`, `{{room_type_id}}`, `{{check_in}}`, `{{check_out}}`).
 - **GET** `/v1/inventory/search?check_in=&check_out=` — Bearer; optional `hotel_ids`, `sort`, `limit`, `rate_plan_code`, `promotion_code`.
 - **GET** `/v1/inventory/hotels/:hotelId/room-types/:roomTypeId/calendar?from=&to=` — Bearer; per-day occupancy / blocks (half-open range).
-- **GET** `/v1/reservations` — Bearer; optional `limit` / `offset` query params.
+- **GET** `/v1/reservations` — Bearer; optional `limit` / `offset` / `chain_id` / `status` / `hotel_id` query params.
 - **POST** `/v1/reservations` — Bearer + `Idempotency-Key` + JSON body (see request description).
 - **GET** `/v1/reservations/:id` — Bearer; uses `{{reservation_id}}`.
 - **PATCH** `/v1/reservations/:id` — Bearer; JSON `{ "status": "confirmed" | "cancelled" }`; optional **`cancellation_reason`** when cancelling (see **Cancel**).

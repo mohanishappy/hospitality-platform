@@ -1,5 +1,6 @@
 import type { Context } from "hono";
 import type { Env } from "../types";
+import { requireAllowedChainIds, reservationInScope } from "../chain-scope";
 import { ifMatchPreconditionResponse, normalizeRowVersion, weakEtag } from "../etag";
 import {
   guestScopeFromHeaders,
@@ -15,10 +16,10 @@ import {
 } from "../validation";
 
 export async function patchReservationStatus(c: Context<{ Bindings: Env }>) {
-  const chainId = c.req.header("x-chain-id");
-  if (!chainId) {
-    return problem(401, "Unauthorized", "Missing x-chain-id");
-  }
+  const scopeResult = requireAllowedChainIds(c);
+  if (!scopeResult.ok) return scopeResult.response;
+  const allowedChainIds = scopeResult.ids;
+
   const id = c.req.param("id");
   if (!id?.trim()) {
     return problem(400, "Bad Request", "Reservation id required");
@@ -53,22 +54,22 @@ export async function patchReservationStatus(c: Context<{ Bindings: Env }>) {
   const { data: row, error: rowErr } = await supa
     .schema("reservations")
     .from("reservation_stub")
-    .select("id, status, row_version")
+    .select("id, status, row_version, chain_id")
     .eq("id", id.trim())
-    .eq("chain_id", chainId)
     .maybeSingle();
   if (rowErr) {
     return problem(500, "Database error", rowErr.message);
   }
-  if (!row) {
+  if (!row || !reservationInScope(row.chain_id, allowedChainIds)) {
     return problem(404, "Not Found", "Reservation not found for this chain");
   }
+  const chainId = row.chain_id;
   if (
     guestScoped &&
     scope.userEmail &&
     !(await reservationOwnedByGuestEmail(
       supa,
-      chainId,
+      allowedChainIds,
       id.trim(),
       scope.userEmail
     ))

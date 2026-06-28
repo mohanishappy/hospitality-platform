@@ -4,14 +4,33 @@ import {
   enforcePublicBookingAuthorization,
   enforceRouteAuthorization,
 } from "./authorization";
-import { getChainId, getRoles, getUserEmail } from "./claims";
+import {
+  getChainId,
+  getChainIds,
+  getEnterpriseId,
+  getOAuthClientId,
+  getRoles,
+  getSubject,
+  getUserEmail,
+  isM2mToken,
+  isStaffUser,
+} from "./claims";
+import {
+  pickActiveChainId,
+  resolveChainScope,
+  staffScopeForbiddenDetail,
+} from "./chain-scope";
+import {
+  fetchEnterpriseChainsById,
+  resolveChainByCode,
+} from "./inventory-client";
+import { fetchStaffAccess } from "./staff-access";
 import { problem } from "./problem";
 import {
   isPublicBookingRoute,
   isPublicChainCatalogRoute,
   readChainCode,
 } from "./public-booking";
-import { resolveChainByCode } from "./resolve-chain";
 import type { GatewayEnv, GatewayVariables } from "./types";
 
 export const requireAuthAndChain: MiddlewareHandler<{
@@ -89,19 +108,67 @@ export const requireAuthAndChain: MiddlewareHandler<{
       audience,
     });
     const chainId = getChainId(payload);
-    if (!chainId) {
+    const chainIdsClaim = getChainIds(payload);
+    const enterpriseId = getEnterpriseId(payload);
+    const roles = getRoles(payload);
+
+    let chainIds: string[] = [];
+    let staffAccess = null;
+    if (enterpriseId) {
+      const enterpriseChains = await fetchEnterpriseChainsById(
+        c.env,
+        enterpriseId
+      );
+      if (enterpriseChains.length === 0) {
+        return problem(
+          403,
+          "Forbidden",
+          "Enterprise has no brands or enterprise_id is invalid",
+          "about:blank#unknown-enterprise"
+        );
+      }
+
+      if (isStaffUser(roles)) {
+        staffAccess = await fetchStaffAccess(c.env, enterpriseId, {
+          auth0Sub: getSubject(payload),
+          clientId: isM2mToken(payload) ? getOAuthClientId(payload) : null,
+        });
+      }
+
+      chainIds = resolveChainScope(enterpriseChains, roles, staffAccess);
+    } else if (chainIdsClaim?.length) {
+      chainIds = chainIdsClaim;
+    } else if (chainId) {
+      chainIds = [chainId];
+    }
+
+    if (chainIds.length === 0) {
       return problem(
         403,
         "Forbidden",
-        "Access token must include chain_id claim (https://hospitality.app/claims/chain_id)",
+        enterpriseId
+          ? staffScopeForbiddenDetail(roles, staffAccess)
+          : "Access token must include enterprise_id or chain_id claim",
         "about:blank#missing-chain"
       );
     }
+
+    const chainCode = readChainCode(c);
+    const resolvedFromCode = chainCode
+      ? await resolveChainByCode(c.env, chainCode)
+      : null;
+    const activeChainId = pickActiveChainId(
+      chainIds,
+      chainId,
+      resolvedFromCode
+    );
+
     c.set("jwt", payload);
-    c.set("chainId", chainId);
+    c.set("chainId", activeChainId);
+    c.set("chainIds", chainIds);
+    if (enterpriseId) c.set("enterpriseId", enterpriseId);
     const userEmail = getUserEmail(payload);
     if (userEmail) c.set("userEmail", userEmail);
-    const roles = getRoles(payload);
     c.set("roles", roles);
   } catch {
     return problem(

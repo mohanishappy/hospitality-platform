@@ -123,6 +123,21 @@ Split so backend can ship while UI starts:
 
 ---
 
+## Phase 9 — Admin access control (in progress)
+
+Design: [`docs/AUTHORIZATION.md`](AUTHORIZATION.md).
+
+| Work | FRs | Status |
+|------|-----|--------|
+| **Staff CRUD API** — list/create/update/disable `staff_member`; replace `staff_chain_grant` sets. | FR-Z4 | **Shipped** — `/v1/inventory/admin/staff` (manager + `staff:admin`) |
+| **Admin SPA** — invite by email, brand checkboxes, corporate “all brands” toggle. | FR-Z4 | Backlog |
+| **Optional:** move **roles** from Auth0 into DB; Auth0 Action only sets `sub` + `enterprise_id`. | FR-Z1 (evolve) | Future — see AUTHORIZATION.md |
+| **Optional:** audit columns on grants (`granted_by`, `granted_at`). | FR-Z4 | Future migration |
+
+**Exit (when complete):** Managers provision staff and brand access without SQL or Auth0 dashboard.
+
+**Not planned yet:** separate **`services/authz`** worker — see AUTHORIZATION.md.
+
 ## Backlog coverage (every §2 FR → phase)
 
 | FR | Phase | Topic |
@@ -144,6 +159,8 @@ Split so backend can ship while UI starts:
 | FR-R11 | 5 | PATCH concurrency (ETags) |
 | FR-Z1 | 6 | Roles / scopes |
 | FR-Z2 | 6 | M2M vs user policies |
+| FR-Z3 | 9 (shipped) | Enterprise multi-brand (**0017**) |
+| FR-Z4 | 9 (API shipped) | Admin staff REST + grant replace |
 | FR-O1 | 1 | Correlation IDs |
 | FR-O2 | 7 (7D) | Metrics + structured logs (**7D shipped**) |
 | FR-O3 | 1 + 7 (7E) | Readiness — JWKS + optional Supabase ping (**7E shipped**) |
@@ -186,3 +203,4 @@ Split so backend can ship while UI starts:
 | 2026-06-28 | Phase **8B**: guest **booking flow** in **`apps/web`** (search → quote → create → confirmation). |
 | 2026-06-28 | Phase **8C**: **staff calendar UI** — month grid from **`GET …/calendar`**. |
 | 2026-06-28 | Phase **8D**: **staff reservations UI** — list filters, detail, confirm/cancel, notes (**`If-Match`**). Phase **8 complete**. |
+| 2026-06-27 | **Enterprise + auth:** migrations **0017** / **0018**; multi-brand gateway scope; DB staff grants; admin staff API; [`docs/AUTHORIZATION.md`](AUTHORIZATION.md). |

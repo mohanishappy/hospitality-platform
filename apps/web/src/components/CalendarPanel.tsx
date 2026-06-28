@@ -8,12 +8,15 @@ import {
   type HotelSummary,
   type RoomTypeSummary,
 } from "../api/gateway";
+import { useAccessClaims } from "../hooks/useAccessClaims";
 import { useGatewayToken } from "../hooks/useGatewayToken";
 import { calendarGridCells, monthRange } from "../lib/format";
+import { hotelOptionLabel } from "../lib/hotelLabel";
 
 type Props = {
   gatewayUrl: string;
   audience: string;
+  chainCode?: string;
 };
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -25,8 +28,9 @@ function dayKey(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-export function CalendarPanel({ gatewayUrl, audience }: Props) {
+export function CalendarPanel({ gatewayUrl, audience, chainCode }: Props) {
   const { isAuthenticated } = useAuth0();
+  const { isMultiChain } = useAccessClaims();
   const getToken = useGatewayToken(audience);
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
@@ -81,7 +85,7 @@ export function CalendarPanel({ gatewayUrl, audience }: Props) {
       setError(null);
       try {
         const token = await getTokenRef.current();
-        const data = await fetchHotels(gatewayUrl, token);
+        const data = await fetchHotels(gatewayUrl, token, chainCode);
         if (cancelled) return;
         const list = data.hotels ?? [];
         setHotels(list);
@@ -98,7 +102,7 @@ export function CalendarPanel({ gatewayUrl, audience }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [gatewayUrl, isAuthenticated]);
+  }, [chainCode, gatewayUrl, isAuthenticated]);
 
   useEffect(() => {
     if (!isAuthenticated || !selectedHotelId) {
@@ -112,7 +116,12 @@ export function CalendarPanel({ gatewayUrl, audience }: Props) {
       setError(null);
       try {
         const token = await getTokenRef.current();
-        const data = await fetchRoomTypes(gatewayUrl, token, selectedHotelId);
+        const data = await fetchRoomTypes(
+          gatewayUrl,
+          token,
+          selectedHotelId,
+          chainCode
+        );
         if (cancelled) return;
         const list = data.room_types ?? [];
         setRoomTypes(list);
@@ -145,12 +154,17 @@ export function CalendarPanel({ gatewayUrl, audience }: Props) {
       setError(null);
       try {
         const token = await getTokenRef.current();
-        const data = await fetchCalendar(gatewayUrl, token, {
-          hotelId: selectedHotelId,
-          roomTypeId: selectedRoomTypeId,
-          from: range.from,
-          to: range.to,
-        });
+        const data = await fetchCalendar(
+          gatewayUrl,
+          token,
+          {
+            hotelId: selectedHotelId,
+            roomTypeId: selectedRoomTypeId,
+            from: range.from,
+            to: range.to,
+          },
+          chainCode
+        );
         if (!cancelled) setDays(data.days ?? []);
       } catch (err) {
         if (!cancelled) {
@@ -221,7 +235,7 @@ export function CalendarPanel({ gatewayUrl, audience }: Props) {
             ) : (
               hotels.map((hotel) => (
                 <option key={hotel.id} value={hotel.id}>
-                  {hotel.name}
+                  {hotelOptionLabel(hotel, isMultiChain && !chainCode)}
                 </option>
               ))
             )}

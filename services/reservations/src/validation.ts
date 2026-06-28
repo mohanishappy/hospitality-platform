@@ -340,12 +340,14 @@ export function parseReservationListFilters(c: {
       ok: true;
       status?: "pending" | "confirmed" | "cancelled";
       hotel_id?: string;
+      chain_id?: string;
       stay_from?: string;
       stay_to?: string;
     }
   | { ok: false; detail: string } {
   const statusRaw = c.req.query("status")?.trim();
   const hotelIdRaw = c.req.query("hotel_id")?.trim();
+  const chainIdRaw = c.req.query("chain_id")?.trim();
   const stayFrom = c.req.query("stay_from")?.trim();
   const stayTo = c.req.query("stay_to")?.trim();
 
@@ -371,6 +373,14 @@ export function parseReservationListFilters(c: {
       return { ok: false, detail: "hotel_id must be a UUID when provided" };
     }
     hotel_id = hotelIdRaw;
+  }
+
+  let chain_id: string | undefined;
+  if (chainIdRaw) {
+    if (!uuidLike.test(chainIdRaw)) {
+      return { ok: false, detail: "chain_id must be a UUID when provided" };
+    }
+    chain_id = chainIdRaw;
   }
 
   const isoDateRe = /^\d{4}-\d{2}-\d{2}$/;
@@ -399,10 +409,11 @@ export function parseReservationListFilters(c: {
       ok: true,
       status,
       hotel_id,
+      chain_id,
       stay_from: stayFrom,
       stay_to: stayTo,
     };
   }
 
-  return { ok: true, status, hotel_id };
+  return { ok: true, status, hotel_id, chain_id };
 }

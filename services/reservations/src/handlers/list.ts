@@ -1,5 +1,6 @@
 import type { Context } from "hono";
 import type { Env } from "../types";
+import { requireAllowedChainIds, reservationInScope } from "../chain-scope";
 import {
   guestScopeFromHeaders,
   redactStaffFields,
@@ -12,10 +13,10 @@ import { supaClient } from "../supabase";
 import { parseListQuery, parseReservationListFilters } from "../validation";
 
 export async function listReservations(c: Context<{ Bindings: Env }>) {
-  const chainId = c.req.header("x-chain-id");
-  if (!chainId) {
-    return problem(401, "Unauthorized", "Missing x-chain-id");
-  }
+  const scopeResult = requireAllowedChainIds(c);
+  if (!scopeResult.ok) return scopeResult.response;
+  const allowedChainIds = scopeResult.ids;
+
   if (!c.env.SUPABASE_URL || !c.env.SUPABASE_SERVICE_ROLE_KEY) {
     return problem(500, "Misconfigured", "Supabase env missing");
   }
@@ -41,11 +42,17 @@ export async function listReservations(c: Context<{ Bindings: Env }>) {
   const select = guestScoped
     ? `${RESERVATION_LIST_SELECT}, guest!inner(email)`
     : RESERVATION_LIST_SELECT;
-  let q = supa
-    .schema("reservations")
-    .from("reservation_stub")
-    .select(select)
-    .eq("chain_id", chainId);
+  let q = supa.schema("reservations").from("reservation_stub").select(select);
+  if (filters.chain_id) {
+    if (!reservationInScope(filters.chain_id, allowedChainIds)) {
+      return problem(403, "Forbidden", "chain_id is not in your enterprise scope");
+    }
+    q = q.eq("chain_id", filters.chain_id);
+  } else if (allowedChainIds.length === 1) {
+    q = q.eq("chain_id", allowedChainIds[0]);
+  } else {
+    q = q.in("chain_id", allowedChainIds);
+  }
   if (guestScoped && scope.userEmail) {
     q = q.eq("guest.email", scope.userEmail);
   }

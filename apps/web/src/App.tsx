@@ -3,6 +3,7 @@ import { useAuth0 } from "@auth0/auth0-react";
 import { BookingPanel } from "./components/BookingPanel";
 import { BrandHeader } from "./components/BrandHeader";
 import { CalendarPanel } from "./components/CalendarPanel";
+import { EnterprisePage } from "./components/EnterprisePage";
 import { PanelErrorBoundary } from "./components/ErrorBoundary";
 import { HomePage } from "./components/HomePage";
 import { ReservationsPanel } from "./components/ReservationsPanel";
@@ -12,7 +13,7 @@ import {
   useAccessClaims,
 } from "./hooks/useAccessClaims";
 import { useAuthReady } from "./hooks/useGatewayToken";
-import { useChainPath } from "./hooks/useChainPath";
+import { useTenantPath } from "./hooks/useChainPath";
 import { fetchChainByCode } from "./api/gateway";
 import type { AppConfig } from "./config";
 import "./App.css";
@@ -26,13 +27,15 @@ function ChainSite({ config, chainCode }: { config: AppConfig; chainCode: string
   const { ready } = useAuthReady();
   const { can, isGuestOnly } = useAccessClaims();
   const [brandName, setBrandName] = useState(chainCode);
+  const [defaultChainId, setDefaultChainId] = useState<string | undefined>();
 
   useEffect(() => {
     let cancelled = false;
     void fetchChainByCode(config.gatewayUrl, chainCode)
       .then((data) => {
-        if (!cancelled && data.chain?.name) {
-          setBrandName(data.chain.name);
+        if (!cancelled && data.chain) {
+          if (data.chain.name) setBrandName(data.chain.name);
+          setDefaultChainId(data.chain.id);
         }
       })
       .catch(() => {
@@ -50,7 +53,11 @@ function ChainSite({ config, chainCode }: { config: AppConfig; chainCode: string
 
   return (
     <div className="app">
-      <BrandHeader brandName={brandName} audience={config.auth0Audience} />
+      <BrandHeader
+        brandName={brandName}
+        audience={config.auth0Audience}
+        chainCode={chainCode}
+      />
 
       <main className="site-main">
         <section className="brand-hero">
@@ -66,11 +73,13 @@ function ChainSite({ config, chainCode }: { config: AppConfig; chainCode: string
           chainCode={chainCode}
         />
 
-        {showReservations && (
+        {showReservations && defaultChainId && (
           <ReservationsPanel
             gatewayUrl={config.gatewayUrl}
             audience={config.auth0Audience}
             guestMode={isGuestOnly}
+            chainCode={chainCode}
+            defaultChainFilter={defaultChainId}
           />
         )}
 
@@ -79,6 +88,7 @@ function ChainSite({ config, chainCode }: { config: AppConfig; chainCode: string
             <CalendarPanel
               gatewayUrl={config.gatewayUrl}
               audience={config.auth0Audience}
+              chainCode={chainCode}
             />
           </PanelErrorBoundary>
         )}
@@ -90,14 +100,18 @@ function ChainSite({ config, chainCode }: { config: AppConfig; chainCode: string
 }
 
 export function App({ config }: Props) {
-  const { chainCode } = useChainPath();
+  const { chainCode, enterpriseCode } = useTenantPath();
+
+  if (enterpriseCode) {
+    return <EnterprisePage config={config} enterpriseCode={enterpriseCode} />;
+  }
 
   if (!chainCode) {
     return <HomePage config={config} />;
   }
 
   return (
-    <AccessClaimsProvider audience={config.auth0Audience}>
+    <AccessClaimsProvider audience={config.auth0Audience} gatewayUrl={config.gatewayUrl}>
       <ChainSite config={config} chainCode={chainCode} />
     </AccessClaimsProvider>
   );

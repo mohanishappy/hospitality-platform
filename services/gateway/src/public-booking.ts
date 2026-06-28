@@ -8,12 +8,18 @@ const availabilityRe = new RegExp(
 const createReservationRe = /^\/v1\/reservations$/;
 const listChainsRe = /^\/v1\/inventory\/chains$/;
 const chainByCodeRe = /^\/v1\/inventory\/chains\/[^/]+$/;
+const listEnterprisesRe = /^\/v1\/inventory\/enterprises$/;
+const enterpriseByCodeRe = /^\/v1\/inventory\/enterprises\/[^/]+$/;
+const enterpriseChainsRe = /^\/v1\/inventory\/enterprises\/[^/]+\/chains$/;
 
 /** Routes allowed without Bearer auth when tenant is supplied via `x-chain-code`. */
 export function isPublicBookingRoute(method: string, path: string): boolean {
   const m = method.toUpperCase();
   if (m === "GET" && listChainsRe.test(path)) return true;
   if (m === "GET" && chainByCodeRe.test(path)) return true;
+  if (m === "GET" && listEnterprisesRe.test(path)) return true;
+  if (m === "GET" && enterpriseByCodeRe.test(path)) return true;
+  if (m === "GET" && enterpriseChainsRe.test(path)) return true;
   if (m === "GET" && searchRe.test(path)) return true;
   if (m === "GET" && hotelsRe.test(path)) return true;
   if (m === "GET" && availabilityRe.test(path)) return true;
@@ -25,7 +31,12 @@ export function isPublicBookingRoute(method: string, path: string): boolean {
 export function isPublicChainCatalogRoute(method: string, path: string): boolean {
   const m = method.toUpperCase();
   return (
-    m === "GET" && (listChainsRe.test(path) || chainByCodeRe.test(path))
+    m === "GET" &&
+    (listChainsRe.test(path) ||
+      chainByCodeRe.test(path) ||
+      listEnterprisesRe.test(path) ||
+      enterpriseByCodeRe.test(path) ||
+      enterpriseChainsRe.test(path))
   );
 }
 

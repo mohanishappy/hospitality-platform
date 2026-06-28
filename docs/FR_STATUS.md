@@ -24,6 +24,8 @@ Aligned with [`REQUIREMENTS.md`](REQUIREMENTS.md) **§2** backlog and [`IMPLEMEN
 | FR-R10 | Reservation notes | **`internal_note`**, **`guest_note`** on **`reservation_stub`**; **`PATCH /v1/reservations/{id}/notes`** (**0016**). |
 | FR-Z1 | Roles / scopes | Gateway enforces route policies when claim **`https://hospitality.app/claims/roles`** is present (`read_only`, `front_desk`, `manager`, `integration`). |
 | FR-Z2 | M2M vs user | **`gty: client-credentials`** tokens with roles enforced: read + create only (no confirm/cancel/guest/notes write). |
+| FR-Z3 | Enterprise + multi-brand | Migration **0017**: **`inventory.enterprise`**, chains linked by **`enterprise_id`**; gateway **`x-chain-ids`**; optional **`chain_id`** list filter; **`GET /v1/inventory/me/chains`**. See [`docs/AUTHORIZATION.md`](AUTHORIZATION.md). |
+| FR-Z4 | DB staff brand grants + admin API | Migration **0018**; **`GET/POST/PATCH/PUT /v1/inventory/admin/staff`** (manager). Admin SPA backlog. |
 | FR-O2 | Metrics / structured logs | Gateway **`withRequestMetrics`**: JSON log per request; **Workers Analytics Engine** binding **`ANALYTICS`** (**7D**). |
 | FR-O3 | Readiness | **`GET /health/ready`**: JWKS + optional Supabase PostgREST ping (**7E**). |
 | FR-D1 | CI / contract tests | Vitest; OpenAPI guard; public + golden-path smoke; **Newman** optional (**7G**). |
@@ -31,6 +33,6 @@ Aligned with [`REQUIREMENTS.md`](REQUIREMENTS.md) **§2** backlog and [`IMPLEMEN
 | FR-U1 | Guest/staff SPA | **8A–8D** shipped in **`apps/web`** (shell, booking, calendar, reservations UI); **8E** Pages deploy. |
 | FR-U2 | Staff calendar UI | **Phase 8C** — read-only month grid from **`GET …/calendar`** (hotel + room type pickers). |
 
-**Migrations:** apply through [`0016_cancellation_notes.sql`](../supabase/migrations/0016_cancellation_notes.sql).
+**Migrations:** apply through [`0018_staff_brand_access.sql`](../supabase/migrations/0018_staff_brand_access.sql).
 
 **Demo seed (0014):** chain **`DEMO`** — rate plan **`LOS3`** (3+ night tier **9000** cents/night on **DEMO-H1** `STD-QN` when BAR is higher); promotion **`SAVE5`** (500 bps off).

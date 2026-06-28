@@ -16,6 +16,9 @@ export type GatewayVariables = {
   requestId: string;
   jwt?: JWTPayload;
   chainId?: string;
+  /** All chains in the user's enterprise (from JWT). */
+  chainIds?: string[];
+  enterpriseId?: string;
   /** Parsed roles claim; `null` when claim absent (legacy full access). */
   roles?: string[] | null;
   /** Lowercased login email for guest-scoped reservation access. */

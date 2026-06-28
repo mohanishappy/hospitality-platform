@@ -64,9 +64,21 @@ npx supabase db push
 
 1. Create an **API** with identifier = your `AUTH0_AUDIENCE` (e.g. `https://hospitality-api`).
 2. Create a **Single Page Application** (for the UI later) with allowed callbacks.
-3. Add an **Action** (post-login / credentials) to put **`https://hospitality.app/claims/chain_id`** into the access token as a UUID string matching **`inventory.chain.id`** for that tenant. Demo seed: `00000000-0000-0000-0000-000000000001`. After [`0005_realistic_catalog_seed.sql`](supabase/migrations/0005_realistic_catalog_seed.sql), additional chains use fixed ids in that file (e.g. Harborline `a1111111-1111-4111-8111-111111111111`) — use a separate M2M client or metadata-driven Action if you need multiple tenants in Auth0.
+3. Add an **Action** (post-login / credentials) as described in **[`docs/AUTHORIZATION.md`](docs/AUTHORIZATION.md)** (Auth0 identity + roles only; brand scope is in the database). Demo enterprise id: `eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee` (Palladium Lodging Group).
 
 **Post Login Action (SPA users)** — Auth0 Dashboard → Actions → Library → **Build Custom** → trigger **Login / Post Login**. Enable **RBAC** on your API (Settings → RBAC Settings → **Enable RBAC**, **Add Permissions in the Access Token**). Create roles **`guest`**, **`front_desk`**, **`manager`**, **`read_only`** and assign them to users as needed.
+
+The SPA passes **`chain_code`** on login (from `/c/:chainCode`) via `authorizationParams`; the gateway uses **`x-chain-code`** on API calls to pick the active brand. Users must **log out and sign in again** after changing the Action.
+
+**Staff brand access (database)** — see **[`docs/AUTHORIZATION.md`](docs/AUTHORIZATION.md)** for the full model, **admin staff API**, and future admin UI. Summary: per-brand scope lives in Supabase ([`0018_staff_brand_access.sql`](supabase/migrations/0018_staff_brand_access.sql)). Managers use **`/v1/inventory/admin/staff`** to provision staff; everyone else needs a **`staff_member`** row keyed by JWT **`sub`**. Set **`all_chains = true`** for corporate access, or assign **`chain_ids`** via the API. Changes apply within ~60s (gateway cache). Guests are never restricted by brand — only by email on their reservations.
+
+After your first staff login, copy **`sub`** from [jwt.io](https://jwt.io) and update the seed row (or insert a new one):
+
+```sql
+update inventory.staff_member
+set auth0_sub = 'auth0|YOUR_SUB_HERE'
+where email = 'manager@plg.demo';
+```
 
 ```javascript
 /**
@@ -76,39 +88,37 @@ npx supabase db push
 exports.onExecutePostLogin = async (event, api) => {
   const ns = "https://hospitality.app/claims";
 
-  // Must match inventory.chain.id for this tenant (see README / seed migrations).
-  const CHAIN_ID = "00000000-0000-0000-0000-000000000001";
-
-  api.accessToken.setCustomClaim(`${ns}/chain_id`, CHAIN_ID);
+  // Must match inventory.enterprise.id for this tenant (0017_enterprise.sql).
+  const ENTERPRISE_ID = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
 
   const assigned =
     event.authorization?.roles?.map((role) => role.name).filter(Boolean) ?? [];
+  const roles = assigned.length > 0 ? assigned : ["guest"];
 
-  // No Auth0 role → guest (book + own reservations only).
-  api.accessToken.setCustomClaim(`${ns}/roles`, assigned.length > 0 ? assigned : ["guest"]);
+  api.accessToken.setCustomClaim(`${ns}/enterprise_id`, ENTERPRISE_ID);
+  api.accessToken.setCustomClaim(`${ns}/roles`, roles);
 
-  // Auth0 API access tokens omit `email` unless added explicitly (needed for guest scoping).
   if (event.user.email) {
     api.accessToken.setCustomClaim(`${ns}/email`, event.user.email);
   }
 
-  // Optional: same claims on ID token for debugging in the SPA.
-  api.idToken.setCustomClaim(`${ns}/chain_id`, CHAIN_ID);
-  api.idToken.setCustomClaim(`${ns}/roles`, assigned.length > 0 ? assigned : ["guest"]);
+  api.idToken.setCustomClaim(`${ns}/enterprise_id`, ENTERPRISE_ID);
+  api.idToken.setCustomClaim(`${ns}/roles`, roles);
   if (event.user.email) {
     api.idToken.setCustomClaim(`${ns}/email`, event.user.email);
   }
 };
 ```
 
-Add the Action to the **Login** flow. The SPA requests scope **`openid profile email`**; still add **`${ns}/email`** in the Action because Auth0 often does **not** put `email` on API access tokens by default.
+Add the Action to the **Login** flow. The SPA requests scope **`openid profile email`** and passes **`chain_code`** when signing in from a brand page (`/c/HBR`).
 
-**Credentials Exchange Action (M2M)** — same `chain_id` claim; omit roles or set `["integration"]` / `["manager"]` as needed. M2M tokens without a roles claim keep legacy full API access at the gateway.
+**Credentials Exchange Action (M2M)** — set **`enterprise_id`** only; register the client in **`inventory.integration_client`** with brand grants (same model as staff). M2M tokens without a roles claim keep legacy full API access at the gateway.
 
-**After changing the Action or role model:** log out of the SPA (clears cached tokens), log in again, and **redeploy the gateway** (and reservations worker if you use guest scoping):
+**After changing the Action, user metadata, or role model:** log out of the SPA (clears cached tokens), log in again, and **redeploy the gateway** (and reservations/inventory workers):
 
 ```bash
 npm run deploy:gateway
+npm run deploy:inventory
 npm run deploy:reservations
 ```
 
@@ -116,9 +126,12 @@ The deployed gateway must include the **`guest`** role map — otherwise tokens 
 
 **Quick JWT check:** decode the access token at [jwt.io](https://jwt.io) and confirm:
 
-- `https://hospitality.app/claims/chain_id` — UUID matching your seed chain
+- `https://hospitality.app/claims/enterprise_id` — enterprise UUID (PLG seed: `eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee`)
 - `https://hospitality.app/claims/roles` — `["guest"]` for users with no Auth0 role
 - `https://hospitality.app/claims/email` — login email (required for guest “my reservations”)
+- JWT **`sub`** — used with **`inventory.staff_member`** for brand scope (staff only)
+
+Legacy tokens may still include **`chain_id`** / **`chain_ids`** UUID claims; the gateway accepts those when **`enterprise_id`** is absent.
 
 ## 3) Cloudflare — first-time deploy order
 
@@ -305,7 +318,7 @@ npm run dev:gateway        # other terminal; needs bindings to the other two
 
 ## Conventions (from architecture plan)
 
-- Multi-chain: all tenant rows include `chain_id`; gateway enforces token `chain_id` vs path/body.
+- Multi-chain: reservation rows stay **`chain_id`**-scoped; enterprise users carry **`enterprise_id`** on the JWT. Gateway loads brand UUIDs from inventory, applies staff grants from **`inventory.staff_member`**, and forwards **`x-chain-ids`**. Active brand from **`x-chain-code`** (SPA brand path). **`GET /v1/inventory/me/chains`** returns the caller’s allowed brands. List accepts optional **`chain_id`** query filter.
 - Errors: **RFC 7807** `application/problem+json`.
 - Bookings: **`Idempotency-Key`** on `POST /v1/reservations`; stays are **date-only** with `check_out` **after** `check_in`. Capacity is **per night**: each night in **[check_in, check_out)** may have at most **`units_total` + `overbooking_allowance`** overlapping **pending**/**confirmed** stays (**`0012`** replaces interval-only counting). **Commercial:** **`tax_rate_bps`** on room subtotal, **`fee_fixed_cents`** per stay (quote via **GET …/availability**). Reservation **status**: `pending`, `confirmed`, `cancelled` (**`0009`**).
 
