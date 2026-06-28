@@ -1,8 +1,20 @@
 import type {
+  CancellationReason,
   CreateReservationBody,
   GuestPatch,
+  NotesPatch,
   ReservationStatus,
 } from "./types";
+
+const NOTE_MAX_LENGTH = 4000;
+
+export const CANCELLATION_REASONS: readonly CancellationReason[] = [
+  "guest_request",
+  "no_show",
+  "duplicate",
+  "rate_dispute",
+  "other",
+] as const;
 
 const isoDateRe = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -127,18 +139,52 @@ export function parseCreateBody(raw: unknown):
 
 export function parseReservationStatus(
   raw: unknown
-): { ok: true; status: ReservationStatus } | { ok: false; detail: string } {
+):
+  | {
+      ok: true;
+      status: ReservationStatus;
+      cancellation_reason?: CancellationReason | null;
+    }
+  | { ok: false; detail: string } {
   if (raw === null || typeof raw !== "object") {
     return { ok: false, detail: "JSON body required" };
   }
-  const s = (raw as Record<string, unknown>).status;
+  const o = raw as Record<string, unknown>;
+  const s = o.status;
   if (s !== "pending" && s !== "confirmed" && s !== "cancelled") {
     return {
       ok: false,
       detail: 'status must be "pending", "confirmed", or "cancelled"',
     };
   }
-  return { ok: true, status: s };
+  let cancellation_reason: CancellationReason | null | undefined;
+  if ("cancellation_reason" in o) {
+    const r = o.cancellation_reason;
+    if (r === null || r === undefined) {
+      cancellation_reason = null;
+    } else if (typeof r === "string") {
+      const t = r.trim();
+      if (!CANCELLATION_REASONS.includes(t as CancellationReason)) {
+        return {
+          ok: false,
+          detail: `cancellation_reason must be one of: ${CANCELLATION_REASONS.join(", ")}`,
+        };
+      }
+      cancellation_reason = t as CancellationReason;
+    } else {
+      return {
+        ok: false,
+        detail: "cancellation_reason must be a string or null",
+      };
+    }
+    if (s !== "cancelled") {
+      return {
+        ok: false,
+        detail: "cancellation_reason is only allowed when status is cancelled",
+      };
+    }
+  }
+  return { ok: true, status: s, cancellation_reason };
 }
 
 export function canTransitionTo(
@@ -206,6 +252,68 @@ export function parseGuestPatchBody(raw: unknown):
     };
   }
   return { ok: true, patch };
+}
+
+function parseNoteField(
+  value: unknown,
+  field: string
+): { ok: true; value: string | null } | { ok: false; detail: string } {
+  if (value === null) {
+    return { ok: true, value: null };
+  }
+  if (typeof value !== "string") {
+    return { ok: false, detail: `${field} must be a string or null` };
+  }
+  if (value.length > NOTE_MAX_LENGTH) {
+    return {
+      ok: false,
+      detail: `${field} must be at most ${NOTE_MAX_LENGTH} characters`,
+    };
+  }
+  return { ok: true, value };
+}
+
+export function parseNotesPatchBody(raw: unknown):
+  | { ok: true; patch: NotesPatch }
+  | { ok: false; detail: string } {
+  if (raw === null || typeof raw !== "object") {
+    return { ok: false, detail: "JSON body required" };
+  }
+  const o = raw as Record<string, unknown>;
+  const patch: NotesPatch = {};
+  if ("internal_note" in o) {
+    const parsed = parseNoteField(o.internal_note, "internal_note");
+    if (!parsed.ok) return parsed;
+    patch.internal_note = parsed.value;
+  }
+  if ("guest_note" in o) {
+    const parsed = parseNoteField(o.guest_note, "guest_note");
+    if (!parsed.ok) return parsed;
+    patch.guest_note = parsed.value;
+  }
+  if (Object.keys(patch).length === 0) {
+    return {
+      ok: false,
+      detail: "Provide at least one of: internal_note, guest_note",
+    };
+  }
+  return { ok: true, patch };
+}
+
+export function parseRolesHeader(header: string | undefined): string[] | null {
+  if (header === undefined) return null;
+  const trimmed = header.trim();
+  if (!trimmed) return [];
+  return trimmed
+    .split(",")
+    .map((r) => r.trim())
+    .filter(Boolean);
+}
+
+/** When roles are enforced, only manager may write internal_note. */
+export function canWriteInternalNote(roles: string[] | null): boolean {
+  if (roles === null) return true;
+  return roles.includes("manager");
 }
 
 export function parseListQuery(c: {

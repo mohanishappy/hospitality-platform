@@ -1,5 +1,6 @@
 import type { MiddlewareHandler } from "hono";
 import { createRemoteJWKSet, jwtVerify } from "jose";
+import { enforceRouteAuthorization } from "./authorization";
 import { getChainId } from "./claims";
 import { problem } from "./problem";
 import type { GatewayEnv, GatewayVariables } from "./types";
@@ -63,6 +64,10 @@ export const requireAuthAndChain: MiddlewareHandler<{
       "Invalid or expired token",
       "about:blank#invalid-token"
     );
+  }
+  const denied = await enforceRouteAuthorization(c);
+  if (denied) {
+    return denied;
   }
   return next();
 };

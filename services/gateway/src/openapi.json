@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Hospitality Platform API",
-    "description": "Gateway surface for **inventory** (hotels, room types) and **reservations**. Send requests to the gateway URL; it validates **Auth0** JWTs and forwards to backing Workers (injects `x-chain-id` from the token).\n\n**Token:** Bearer access token with `aud` = your API identifier and a tenant claim: claim key **`https://hospitality.app/claims/chain_id`** (string UUID), or **`chain_id`** — must match an `inventory.chain` row.\n\n**Phase 5:** **soft holds** (TTL) reduce availability until released or expired (**migration 0015**). Reservation **GET** returns **`ETag`** (`W/\"row_version\"`); **PATCH** accepts optional **`If-Match`** for optimistic concurrency (**412** on mismatch).\n\n**Errors:** JSON **`application/problem+json`** with `type`, `title`, `detail`, `status` (see schema **Problem**).",
+    "description": "Gateway surface for **inventory** (hotels, room types) and **reservations**. Send requests to the gateway URL; it validates **Auth0** JWTs and forwards to backing Workers (injects `x-chain-id` from the token).\n\n**Token:** Bearer access token with `aud` = your API identifier and a tenant claim: claim key **`https://hospitality.app/claims/chain_id`** (string UUID), or **`chain_id`** — must match an `inventory.chain` row.\n\n**Phase 5:** **soft holds** (TTL) reduce availability until released or expired (**migration 0015**). Reservation **GET** returns **`ETag`** (`W/\\\"row_version\\\"`); **PATCH** accepts optional **`If-Match`** for optimistic concurrency (**412** on mismatch).\n\n**Phase 6:** Optional **`https://hospitality.app/claims/roles`** array (`read_only`, `front_desk`, `manager`, `integration`) enforces route policies when present; tokens **without** a roles claim keep full access. **Cancellation** metadata on status **PATCH**; **`PATCH …/notes`** for **`internal_note`** / **`guest_note`** (**migration 0016**).\n\n**Errors:** JSON **`application/problem+json`** with `type`, `title`, `detail`, `status` (see schema **Problem**).",
     "version": "1.0.0",
     "contact": { "name": "Hospitality Platform" }
   },
@@ -667,7 +667,7 @@
       "patch": {
         "tags": ["Reservations"],
         "summary": "Update reservation status",
-        "description": "Lifecycle: **pending** → **confirmed** | **cancelled**; **confirmed** → **cancelled**. Same status is a no-op. Optional **`If-Match`** with the **`ETag`** from **GET** (or **POST** create); **412** when the header does not match **`row_version`**. **409** if transition invalid.",
+        "description": "Lifecycle: **pending** → **confirmed** | **cancelled**; **confirmed** → **cancelled**. Same status is a no-op. When cancelling, optional **`cancellation_reason`** is stored and **`cancelled_at`** is set server-side. Optional **`If-Match`** with the **`ETag`** from **GET** (or **POST** create); **412** when the header does not match **`row_version`**. **409** if transition invalid.",
         "operationId": "patchReservationStatus",
         "security": [{ "bearerAuth": [] }],
         "parameters": [
@@ -764,6 +764,60 @@
           },
           "400": { "$ref": "#/components/responses/Problem" },
           "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "412": { "$ref": "#/components/responses/PreconditionFailed" },
+          "500": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/v1/reservations/{id}/notes": {
+      "patch": {
+        "tags": ["Reservations"],
+        "summary": "Patch reservation notes",
+        "description": "At least one of **`internal_note`**, **`guest_note`**. Use **`null`** to clear. **`internal_note`** requires **`manager`** role when the token includes a **`roles`** claim. Optional **`If-Match`** (**412** on **`row_version`** mismatch).",
+        "operationId": "patchReservationNotes",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "Optional weak ETag from **GET** / **POST** create."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ReservationNotesPatch" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Notes updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["reservation"],
+                  "properties": {
+                    "reservation": { "$ref": "#/components/schemas/ReservationDetail" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Problem" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Problem" },
           "404": { "$ref": "#/components/responses/Problem" },
           "412": { "$ref": "#/components/responses/PreconditionFailed" },
           "500": { "$ref": "#/components/responses/Problem" }
@@ -940,6 +994,26 @@
             "minimum": 1,
             "description": "Increments on reservation updates; used for **ETag** / **If-Match**"
           },
+          "cancellation_reason": {
+            "nullable": true,
+            "allOf": [{ "$ref": "#/components/schemas/CancellationReason" }]
+          },
+          "cancelled_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Set when status becomes **cancelled**"
+          },
+          "internal_note": {
+            "type": "string",
+            "nullable": true,
+            "description": "Staff-only note (requires **manager** role when roles are enforced)"
+          },
+          "guest_note": {
+            "type": "string",
+            "nullable": true,
+            "description": "Note visible to guest-facing channels"
+          },
           "pricing_snapshot": {
             "nullable": true,
             "allOf": [{ "$ref": "#/components/schemas/PricingSnapshot" }]
@@ -1046,8 +1120,26 @@
           "status": {
             "type": "string",
             "enum": ["pending", "confirmed", "cancelled"]
+          },
+          "cancellation_reason": {
+            "nullable": true,
+            "allOf": [{ "$ref": "#/components/schemas/CancellationReason" }],
+            "description": "Optional when **status** is **cancelled**"
           }
         }
+      },
+      "CancellationReason": {
+        "type": "string",
+        "enum": ["guest_request", "no_show", "duplicate", "rate_dispute", "other"]
+      },
+      "ReservationNotesPatch": {
+        "type": "object",
+        "minProperties": 1,
+        "properties": {
+          "internal_note": { "type": "string", "nullable": true },
+          "guest_note": { "type": "string", "nullable": true }
+        },
+        "description": "Include at least one property."
       },
       "GuestPatch": {
         "type": "object",

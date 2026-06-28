@@ -10,6 +10,10 @@ export async function forward(
   const headers = new Headers(c.req.raw.headers);
   const chainId = c.get("chainId");
   if (chainId) headers.set("x-chain-id", chainId);
+  const roles = c.get("roles");
+  if (roles !== undefined && roles !== null) {
+    headers.set("x-roles", roles.join(","));
+  }
   const requestId = c.get("requestId");
   if (requestId) headers.set("x-request-id", requestId);
   const method = c.req.raw.method;

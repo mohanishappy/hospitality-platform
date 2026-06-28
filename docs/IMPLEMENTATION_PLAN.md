@@ -1,6 +1,6 @@
 # Implementation plan (backlog)
 
-**Scope:** [`REQUIREMENTS.md`](REQUIREMENTS.md) **§2** (backlog). **§1** is already shipped (migrations through **0012**, gateway OpenAPI).
+**Scope:** [`REQUIREMENTS.md`](REQUIREMENTS.md) **§2** (backlog). **§1** is already shipped (migrations through **0015**, gateway OpenAPI).
 
 This is a **phased** plan: later phases depend on data model and API decisions from earlier ones. Adjust order if product priority differs (e.g. **FR-R8** before heavy commercial work).
 
@@ -79,9 +79,11 @@ This is a **phased** plan: later phases depend on data model and API decisions f
 
 | Work | FRs | Notes |
 |------|-----|--------|
-| **Cancellation reason** enum + optional `cancelled_at` metadata. | FR-R9 | Refund state waits on payments epic. |
-| **Notes** table or columns (`internal_note`, `guest_note`). | FR-R10 | |
-| **Auth0 Action + gateway**: map **roles/scopes** to route allow-lists; M2M vs user (**FR-Z2**). | FR-Z1, FR-Z2 | |
+| **Cancellation reason** enum + **`cancelled_at`** on status transition to **cancelled**. | FR-R9 | Refund state waits on payments epic. |
+| **Notes** columns **`internal_note`**, **`guest_note`**; **`PATCH …/notes`**. | FR-R10 | **`internal_note`** writes require **manager** when roles claim present. |
+| **Gateway roles**: claim **`https://hospitality.app/claims/roles`** → route allow-list; M2M (**`gty: client-credentials`**) restricted to read + create when roles enforced. | FR-Z1, FR-Z2 | Tokens **without** roles claim keep full access (soft rollout). |
+
+**Exit:** Cancellations auditable; staff notes on reservations; optional RBAC at gateway.
 
 ---
 
@@ -156,3 +158,4 @@ This is a **phased** plan: later phases depend on data model and API decisions f
 | 2026-04-12 | Backlog coverage table: every §2 FR mapped to a phase. |
 | 2026-04-07 | Phases **3–4** implemented in migration **0014** + gateway/inventory/reservations: rate plans, LOS tiers, promotions, blocks, policies, **GET /v1/inventory/search**, **GET …/calendar**; quote/create accept **`rate_plan_code`** / **`promotion_code`**. |
 | 2026-04-07 | Phase **5**: migration **0015** (soft holds + **`row_version`**); inventory soft-hold HTTP routes; reservations **ETag** / **If-Match** on GET + PATCH. |
+| 2026-04-07 | Phase **6**: migration **0016** (cancellation metadata + notes); **`PATCH …/notes`**; gateway **roles** claim + route policies (**FR-Z1/Z2** soft rollout). |

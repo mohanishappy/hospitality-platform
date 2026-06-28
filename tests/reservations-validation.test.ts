@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   canTransitionTo,
+  canWriteInternalNote,
   parseCreateBody,
   parseGuestPatchBody,
   parseListQuery,
+  parseNotesPatchBody,
   parseReservationListFilters,
   parseReservationStatus,
+  parseRolesHeader,
 } from "../services/reservations/src/validation.ts";
 
 describe("parseCreateBody", () => {
@@ -76,6 +79,23 @@ describe("parseReservationStatus", () => {
     expect(parseReservationStatus({ status: "pending" }).ok).toBe(true);
     expect(parseReservationStatus({ status: "confirmed" }).ok).toBe(true);
     expect(parseReservationStatus({ status: "cancelled" }).ok).toBe(true);
+  });
+
+  it("accepts optional cancellation_reason when cancelling", () => {
+    const r = parseReservationStatus({
+      status: "cancelled",
+      cancellation_reason: "guest_request",
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.cancellation_reason).toBe("guest_request");
+  });
+
+  it("rejects cancellation_reason on confirm", () => {
+    const r = parseReservationStatus({
+      status: "confirmed",
+      cancellation_reason: "guest_request",
+    });
+    expect(r.ok).toBe(false);
   });
 
   it("rejects unknown status", () => {
@@ -181,5 +201,37 @@ describe("parseListQuery", () => {
       req: { query: (k) => (k === "offset" ? "-1" : undefined) },
     });
     expect(q.offset).toBe(0);
+  });
+});
+
+describe("parseNotesPatchBody", () => {
+  it("accepts guest_note", () => {
+    const r = parseNotesPatchBody({ guest_note: "Late arrival" });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.patch.guest_note).toBe("Late arrival");
+  });
+
+  it("rejects empty patch", () => {
+    expect(parseNotesPatchBody({}).ok).toBe(false);
+  });
+});
+
+describe("canWriteInternalNote", () => {
+  it("allows when roles header absent", () => {
+    expect(canWriteInternalNote(null)).toBe(true);
+  });
+
+  it("requires manager when roles enforced", () => {
+    expect(canWriteInternalNote(["front_desk"])).toBe(false);
+    expect(canWriteInternalNote(["manager"])).toBe(true);
+  });
+});
+
+describe("parseRolesHeader", () => {
+  it("parses comma-separated roles", () => {
+    expect(parseRolesHeader("front_desk,manager")).toEqual([
+      "front_desk",
+      "manager",
+    ]);
   });
 });

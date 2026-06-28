@@ -4,6 +4,7 @@ import { createReservation } from "./handlers/create";
 import { getReservation } from "./handlers/detail";
 import { patchGuest } from "./handlers/guest";
 import { listReservations } from "./handlers/list";
+import { patchNotes } from "./handlers/notes";
 import { patchReservationStatus } from "./handlers/status";
 
 export function reservationsApp() {
@@ -12,6 +13,7 @@ export function reservationsApp() {
   r.post("/", createReservation);
   r.get("/:id", getReservation);
   r.patch("/:id/guest", patchGuest);
+  r.patch("/:id/notes", patchNotes);
   r.patch("/:id", patchReservationStatus);
   return r;
 }

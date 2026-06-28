@@ -11,4 +11,6 @@ export type GatewayVariables = {
   requestId: string;
   jwt?: JWTPayload;
   chainId?: string;
+  /** Parsed roles claim; `null` when claim absent (legacy full access). */
+  roles?: string[] | null;
 };

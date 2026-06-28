@@ -83,7 +83,10 @@ Copy **`access_token`** from the JSON into Postman **`access_token`**.
 3. **GET Room type availability & quote** — optional **`rate_plan_code`** / **`promotion_code`** on the collection.
 4. **GET Search stays** / **GET Room type calendar** — after **0014**; calendar uses **`calendar_from`** / **`calendar_to`**.
 5. **POST Create reservation** — should return **201** (or **200** on replay). **`reservation_id`** is saved to the active environment when possible. Body includes the same optional codes as availability when testing priced bookings.
-6. **GET Reservation by id** — uses **`{{reservation_id}}`**.
+6. **GET Reservation by id** — uses **`{{reservation_id}}`**; saves **`reservation_etag`**.
+7. **PATCH Guest contact** → **PATCH Reservation notes** → **PATCH Confirm** → **PATCH Cancel** (optional **`cancellation_reason`** on collection; **0016**+).
+
+**Roles (optional):** if your Auth0 Action adds **`https://hospitality.app/claims/roles`**, use **`manager`** for cancel + **`internal_note`**, **`front_desk`** for confirm/guest/notes (guest only). Tokens **without** a roles claim behave as today (full access).
 
 ---
 
@@ -107,7 +110,8 @@ Copy **`access_token`** from the JSON into Postman **`access_token`**.
 - **GET** `/v1/reservations` — Bearer; optional `limit` / `offset` query params.
 - **POST** `/v1/reservations` — Bearer + `Idempotency-Key` + JSON body (see request description).
 - **GET** `/v1/reservations/:id` — Bearer; uses `{{reservation_id}}`.
-- **PATCH** `/v1/reservations/:id` — Bearer; JSON `{ "status": "confirmed" | "cancelled" | "pending" }` (see collection **Confirm** / **Cancel**).
+- **PATCH** `/v1/reservations/:id` — Bearer; JSON `{ "status": "confirmed" | "cancelled" }`; optional **`cancellation_reason`** when cancelling (see **Cancel**).
+- **PATCH** `/v1/reservations/:id/notes` — Bearer; `{ "internal_note"?, "guest_note"? }` (at least one field).
 - **PATCH** `/v1/reservations/:id/guest` — partial contact fields; see **PATCH Guest contact**.
 
 ---

@@ -5,11 +5,12 @@ import { problem } from "../problem";
 import { RESERVATION_DETAIL_SELECT } from "../selects";
 import { supaClient } from "../supabase";
 import {
-  canTransitionTo,
-  parseReservationStatus,
+  canWriteInternalNote,
+  parseNotesPatchBody,
+  parseRolesHeader,
 } from "../validation";
 
-export async function patchReservationStatus(c: Context<{ Bindings: Env }>) {
+export async function patchNotes(c: Context<{ Bindings: Env }>) {
   const chainId = c.req.header("x-chain-id");
   if (!chainId) {
     return problem(401, "Unauthorized", "Missing x-chain-id");
@@ -24,29 +25,39 @@ export async function patchReservationStatus(c: Context<{ Bindings: Env }>) {
   } catch {
     return problem(400, "Bad Request", "Invalid JSON body");
   }
-  const parsed = parseReservationStatus(raw);
+  const parsed = parseNotesPatchBody(raw);
   if (!parsed.ok) {
     return problem(400, "Bad Request", parsed.detail);
   }
-  const nextStatus = parsed.status;
+  const roles = parseRolesHeader(c.req.header("x-roles"));
+  if (
+    "internal_note" in parsed.patch &&
+    !canWriteInternalNote(roles)
+  ) {
+    return problem(
+      403,
+      "Forbidden",
+      "internal_note requires the manager role"
+    );
+  }
   if (!c.env.SUPABASE_URL || !c.env.SUPABASE_SERVICE_ROLE_KEY) {
     return problem(500, "Misconfigured", "Supabase env missing");
   }
   const supa = supaClient(c.env);
-  const { data: row, error: rowErr } = await supa
+  const { data: resRow, error: resErr } = await supa
     .schema("reservations")
     .from("reservation_stub")
-    .select("id, status, row_version")
+    .select("id, row_version")
     .eq("id", id.trim())
     .eq("chain_id", chainId)
     .maybeSingle();
-  if (rowErr) {
-    return problem(500, "Database error", rowErr.message);
+  if (resErr) {
+    return problem(500, "Database error", resErr.message);
   }
-  if (!row) {
+  if (!resRow) {
     return problem(404, "Not Found", "Reservation not found for this chain");
   }
-  const rowVersion = normalizeRowVersion(row.row_version);
+  const rowVersion = normalizeRowVersion(resRow.row_version);
   if (rowVersion === null) {
     return problem(500, "Database error", "Missing row_version");
   }
@@ -57,48 +68,11 @@ export async function patchReservationStatus(c: Context<{ Bindings: Env }>) {
   if (pre) {
     return pre;
   }
-  const transition = canTransitionTo(row.status, nextStatus);
-  if (transition === "forbidden") {
-    return problem(
-      409,
-      "Conflict",
-      `Cannot change status from "${row.status}" to "${nextStatus}"`
-    );
-  }
-  if (transition === "noop") {
-    const { data: full, error: fetchErr } = await supa
-      .schema("reservations")
-      .from("reservation_stub")
-      .select(RESERVATION_DETAIL_SELECT)
-      .eq("id", id.trim())
-      .eq("chain_id", chainId)
-      .maybeSingle();
-    if (fetchErr) {
-      return problem(500, "Database error", fetchErr.message);
-    }
-    if (!full) {
-      return problem(404, "Not Found", "Reservation not found for this chain");
-    }
-    const rv = normalizeRowVersion(
-      (full as { row_version?: unknown }).row_version
-    );
-    const res = c.json({ reservation: full });
-    if (rv !== null) {
-      res.headers.set("ETag", weakEtag(rv));
-    }
-    return res;
-  }
   const now = new Date().toISOString();
   const updatePayload: Record<string, string | null> = {
-    status: nextStatus,
     updated_at: now,
+    ...parsed.patch,
   };
-  if (nextStatus === "cancelled") {
-    updatePayload.cancelled_at = now;
-    if (parsed.cancellation_reason !== undefined) {
-      updatePayload.cancellation_reason = parsed.cancellation_reason;
-    }
-  }
   const { error: upErr } = await supa
     .schema("reservations")
     .from("reservation_stub")
@@ -121,12 +95,12 @@ export async function patchReservationStatus(c: Context<{ Bindings: Env }>) {
   if (!full) {
     return problem(404, "Not Found", "Reservation not found for this chain");
   }
-  const rv2 = normalizeRowVersion(
+  const rv = normalizeRowVersion(
     (full as { row_version?: unknown }).row_version
   );
   const out = c.json({ reservation: full });
-  if (rv2 !== null) {
-    out.headers.set("ETag", weakEtag(rv2));
+  if (rv !== null) {
+    out.headers.set("ETag", weakEtag(rv));
   }
   return out;
 }

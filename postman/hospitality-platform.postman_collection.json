@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "a1b2c3d4-hosp-0001-gateway",
     "name": "Hospitality Platform — Gateway API",
-    "description": "Calls the **gateway** only (inventory + reservations).\n\n**Setup:** import the example environment, set `baseUrl` and `access_token` (Auth0 access token with your API `aud` and claim `https://hospitality.app/claims/chain_id`). Run **GET List hotels** then **GET Room types** so **collection** variables `hotel_id` / `room_type_id` fill in (or set them manually on the collection).\n\n**Phase 4 inventory:** **GET Search stays** (`/v1/inventory/search`), **GET Room type calendar** (`…/calendar?from=&to=`). Optional **`rate_plan_code`** / **`promotion_code`** on availability, search, and **POST Create** (migration **0014**; DEMO seed: **LOS3** for 3+ nights, **SAVE5** for 5% off).\n\n**Phase 5:** **POST Create soft hold** / **DELETE Release soft hold** (migration **0015**); **GET Reservation** saves **`reservation_etag`** for optional **`If-Match`** on **PATCH** (**412** if stale).\n\n**Variables:** Postman resolves **environment** before **collection** for the same name. Empty strings in the environment **override** collection values — the example env only defines `baseUrl`, `access_token`, `check_in`, and `check_out` so ids from tests are not shadowed. To pin `hotel_id` in the environment, add the key with a **real UUID** (never an empty placeholder).\n\n**Conventions:** folders group by domain; auth is inherited (Bearer on protected folders). Health uses `noauth`.",
+    "description": "Calls the **gateway** only (inventory + reservations).\n\n**Setup:** import the example environment, set `baseUrl` and `access_token` (Auth0 access token with your API `aud` and claim `https://hospitality.app/claims/chain_id`). Run **GET List hotels** then **GET Room types** so **collection** variables `hotel_id` / `room_type_id` fill in (or set them manually on the collection).\n\n**Phase 4 inventory:** **GET Search stays** (`/v1/inventory/search`), **GET Room type calendar** (`…/calendar?from=&to=`). Optional **`rate_plan_code`** / **`promotion_code`** on availability, search, and **POST Create** (migration **0014**; DEMO seed: **LOS3** for 3+ nights, **SAVE5** for 5% off).\n\n**Phase 5:** **POST Create soft hold** / **DELETE Release soft hold** (migration **0015**); **GET Reservation** saves **`reservation_etag`** for optional **`If-Match`** on **PATCH** (**412** if stale).\n\n**Phase 6:** optional **`cancellation_reason`** on **PATCH Cancel**; **`PATCH Reservation notes`** for **`guest_note`** / **`internal_note`** (migration **0016**). Optional claim **`https://hospitality.app/claims/roles`** (`read_only`, `front_desk`, `manager`, `integration`) — tokens **without** roles keep full access.\n\n**Variables:** Postman resolves **environment** before **collection** for the same name. Empty strings in the environment **override** collection values — the example env only defines `baseUrl`, `access_token`, `check_in`, and `check_out` so ids from tests are not shadowed. To pin `hotel_id` in the environment, add the key with a **real UUID** (never an empty placeholder).\n\n**Conventions:** folders group by domain; auth is inherited (Bearer on protected folders). Health uses `noauth`. Suggested reservation flow: **Create** → **GET** → **Guest** → **Notes** → **Confirm** → **Cancel**.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -72,6 +72,11 @@
       "key": "reservation_etag",
       "value": "",
       "description": "Weak ETag from **GET Reservation** / **POST Create**; optional **If-Match** on PATCH (**FR-R11**)."
+    },
+    {
+      "key": "cancellation_reason",
+      "value": "guest_request",
+      "description": "Optional on **PATCH Cancel**: guest_request | no_show | duplicate | rate_dispute | other (**FR-R9**)."
     }
   ],
   "item": [
@@ -278,7 +283,7 @@
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/v1/reservations?limit=20&offset=0",
-            "description": "Newest first for the JWT `chain_id`. Response includes `has_more` for simple pagination. No embedded `guest` rows."
+            "description": "Newest first for the JWT `chain_id`. Optional query filters (**FR-R8**): **`status`**, **`hotel_id`**, **`stay_from`** + **`stay_to`** (both dates required for overlap). Response includes `has_more`. No embedded `guest` rows."
           },
           "response": []
         },
@@ -431,6 +436,53 @@
           "response": []
         },
         {
+          "name": "PATCH Reservation notes",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const j = pm.response.json();",
+                  "    pm.test('guest_note persisted', function () {",
+                  "        pm.expect(j.reservation && j.reservation.guest_note).to.eql('Late arrival after 10pm');",
+                  "    });",
+                  "    const etag = pm.response.headers.get('ETag');",
+                  "    if (etag) {",
+                  "        pm.collectionVariables.set('reservation_etag', etag);",
+                  "        if (pm.environment.name) {",
+                  "            pm.environment.set('reservation_etag', etag);",
+                  "        }",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "{{reservation_etag}}",
+                "description": "Optional weak ETag for optimistic concurrency."
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"guest_note\": \"Late arrival after 10pm\",\n  \"internal_note\": \"VIP — comp welcome amenity\"\n}"
+            },
+            "url": "{{baseUrl}}/v1/reservations/{{reservation_id}}/notes",
+            "description": "At least one of **`internal_note`**, **`guest_note`**. Run **before Cancel** in the happy path. **`internal_note`** requires **manager** when **`https://hospitality.app/claims/roles`** is present on the token."
+          },
+          "response": []
+        },
+        {
           "name": "PATCH Confirm reservation",
           "event": [
             {
@@ -481,6 +533,12 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
+                  "    const j = pm.response.json();",
+                  "    pm.test('cancelled with metadata', function () {",
+                  "        pm.expect(j.reservation.status).to.eql('cancelled');",
+                  "        pm.expect(j.reservation.cancelled_at).to.be.a('string');",
+                  "        pm.expect(j.reservation.cancellation_reason).to.eql(pm.collectionVariables.get('cancellation_reason'));",
+                  "    });",
                   "    const etag = pm.response.headers.get('ETag');",
                   "    if (etag) {",
                   "        pm.collectionVariables.set('reservation_etag', etag);",
@@ -509,15 +567,15 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"status\": \"cancelled\"\n}"
+              "raw": "{\n  \"status\": \"cancelled\",\n  \"cancellation_reason\": \"{{cancellation_reason}}\"\n}"
             },
             "url": "{{baseUrl}}/v1/reservations/{{reservation_id}}",
-            "description": "Valid from **pending** or **confirmed**. From **cancelled**, further changes return **409**."
+            "description": "Valid from **pending** or **confirmed**. Optional **`cancellation_reason`** (collection var); server sets **`cancelled_at`**. Requires **manager** role when token includes **`roles`** claim. From **cancelled**, further changes return **409**."
           },
           "response": []
         }
       ],
-      "description": "Bearer + `Idempotency-Key` on creates. **PATCH** updates `status` (lifecycle). Dates are **YYYY-MM-DD**; `check_out` must be after `check_in`."
+      "description": "Bearer + `Idempotency-Key` on creates. Suggested flow: **Create** → **GET** → **Guest** → **Notes** → **Confirm** → **Cancel**. Dates are **YYYY-MM-DD**; `check_out` must be after `check_in`."
     }
   ]
 }

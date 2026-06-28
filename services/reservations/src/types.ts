@@ -26,6 +26,18 @@ export type RpcResult = { reservation_id: string; created: boolean };
 
 export type ReservationStatus = "pending" | "confirmed" | "cancelled";
 
+export type CancellationReason =
+  | "guest_request"
+  | "no_show"
+  | "duplicate"
+  | "rate_dispute"
+  | "other";
+
+export type NotesPatch = {
+  internal_note?: string | null;
+  guest_note?: string | null;
+};
+
 export type GuestPatch = {
   first_name?: string;
   last_name?: string;

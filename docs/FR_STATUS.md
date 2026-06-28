@@ -1,6 +1,6 @@
 # Feature requirement status (tracker)
 
-Aligned with [`REQUIREMENTS.md`](REQUIREMENTS.md) **§2** backlog and [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) phases 0–5.
+Aligned with [`REQUIREMENTS.md`](REQUIREMENTS.md) **§2** backlog and [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) phases 0–6.
 
 | FR | Summary | Status |
 |----|---------|--------|
@@ -21,7 +21,11 @@ Aligned with [`REQUIREMENTS.md`](REQUIREMENTS.md) **§2** backlog and [`IMPLEMEN
 | FR-V2 | Calendar API | **`GET /v1/inventory/hotels/{hotelId}/room-types/{roomTypeId}/calendar`** — RPC **`room_type_availability_calendar`** (`from`, `to` half-open). |
 | FR-V5 | Soft holds (TTL) | **`POST …/room-types/{roomTypeId}/soft-holds`**, **`DELETE /v1/inventory/soft-holds/{holdId}`** — RPCs **`create_soft_hold`** / **`release_soft_hold`**; quote/calendar/search/create count active holds (**0015**). |
 | FR-R11 | PATCH concurrency | **`reservation_stub.row_version`**; **GET** / **POST** create echo weak **`ETag`** derived from version; **PATCH** status / guest accept optional **`If-Match`** → **412** on mismatch (**0015**). |
+| FR-R9 | Cancellation metadata | **`cancellation_reason`** enum + server-set **`cancelled_at`** on transition to **cancelled**; optional reason on **PATCH** status (**0016**). Refunds deferred. |
+| FR-R10 | Reservation notes | **`internal_note`**, **`guest_note`** on **`reservation_stub`**; **`PATCH /v1/reservations/{id}/notes`** (**0016**). |
+| FR-Z1 | Roles / scopes | Gateway enforces route policies when claim **`https://hospitality.app/claims/roles`** is present (`read_only`, `front_desk`, `manager`, `integration`). |
+| FR-Z2 | M2M vs user | **`gty: client-credentials`** tokens with roles enforced: read + create only (no confirm/cancel/guest/notes write). |
 
-**Migrations:** apply through [`0015_soft_holds_and_reservation_etags.sql`](../supabase/migrations/0015_soft_holds_and_reservation_etags.sql).
+**Migrations:** apply through [`0016_cancellation_notes.sql`](../supabase/migrations/0016_cancellation_notes.sql).
 
 **Demo seed (0014):** chain **`DEMO`** — rate plan **`LOS3`** (3+ night tier **9000** cents/night on **DEMO-H1** `STD-QN` when BAR is higher); promotion **`SAVE5`** (500 bps off).
