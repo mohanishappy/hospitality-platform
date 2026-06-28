@@ -5,6 +5,7 @@ import type {
   NotesPatch,
   ReservationStatus,
 } from "./types";
+import { isUuidLike } from "./uuid";
 
 const NOTE_MAX_LENGTH = 4000;
 
@@ -328,8 +329,6 @@ export function parseListQuery(c: {
   if (!Number.isFinite(offset) || offset < 0) offset = 0;
   return { limit, offset };
 }
-
-import { isUuidLike } from "../../../lib/uuid.ts";
 
 /** Query params for `GET /v1/reservations` list filters (FR-R8). */
 export function parseReservationListFilters(c: {

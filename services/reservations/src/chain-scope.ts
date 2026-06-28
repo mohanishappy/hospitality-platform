@@ -1,6 +1,6 @@
 import type { Context } from "hono";
 import type { Env } from "./types";
-import { isUuidLike } from "../../../lib/uuid.ts";
+import { isUuidLike } from "./uuid";
 import { problem } from "./problem";
 
 /** Allowed chain UUIDs from gateway (`x-chain-ids` or legacy `x-chain-id`). */

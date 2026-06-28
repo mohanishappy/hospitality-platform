@@ -1,4 +1,4 @@
-import { isUuidLike } from "../../../lib/uuid.ts";
+import { isUuidLike } from "./uuid";
 
 const isoDateRe = /^\d{4}-\d{2}-\d{2}$/;
 

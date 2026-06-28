@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isUuidLike, UUID_LIKE } from "../lib/uuid.ts";
+import { isUuidLike, UUID_LIKE } from "../services/reservations/src/uuid.ts";
 
 const DEMO = "00000000-0000-0000-0000-000000000001";
 const HBR = "a1111111-1111-4111-8111-111111111111";

@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { isUuidLike } from "../../../lib/uuid.ts";
+import { isUuidLike } from "../uuid";
 import type { Env } from "../types";
 import { formatPostgrestError } from "../postgrest";
 import { problem } from "../problem";

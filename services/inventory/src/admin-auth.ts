@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { isUuidLike, UUID_LIKE } from "../../../lib/uuid.ts";
+import { isUuidLike, UUID_LIKE } from "./uuid";
 import { problem } from "./problem";
 import type { Env } from "./types";
 
