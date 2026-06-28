@@ -214,16 +214,38 @@ describe("enforcePublicBookingAuthorization", () => {
   });
 
   it("denies public access to staff inventory writes", async () => {
-    const hotel = "11111111-1111-4111-8111-111111111111";
-    const room = "22222222-2222-4222-8222-222222222222";
     const c = {
       req: {
         method: "POST",
-        path: `/v1/inventory/hotels/${hotel}/room-types/${room}/soft-holds`,
+        path: "/v1/inventory/admin/chains",
       },
       get: () => undefined,
     };
     const res = await enforcePublicBookingAuthorization(c as never);
     expect(res?.status).toBe(403);
+  });
+
+  it("allows public soft hold create and release", async () => {
+    const hotel = "11111111-1111-4111-8111-111111111111";
+    const room = "22222222-2222-4222-8222-222222222222";
+    const hold = "33333333-3333-4333-8333-333333333333";
+    expect(
+      await enforcePublicBookingAuthorization({
+        req: {
+          method: "POST",
+          path: `/v1/inventory/hotels/${hotel}/room-types/${room}/soft-holds`,
+        },
+        get: () => undefined,
+      } as never)
+    ).toBeUndefined();
+    expect(
+      await enforcePublicBookingAuthorization({
+        req: {
+          method: "DELETE",
+          path: `/v1/inventory/soft-holds/${hold}`,
+        },
+        get: () => undefined,
+      } as never)
+    ).toBeUndefined();
   });
 });

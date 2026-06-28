@@ -44,7 +44,7 @@ Brand booking site  (/c/:code)
 | **10C** | Catalog admin API + Properties UI | **API + UI shipped**; OpenAPI pending |
 | **10D** | Rate & promo admin API + Rates UI | **API + UI shipped**; OpenAPI pending | 10C |
 | **10E** | Blocks + policies UI | **Blocks API + UI shipped**; hotel policies in Properties tab | 10C |
-| **10F** | Soft holds in checkout + polish | 2–3 days | 10A |
+| **10F** | Soft holds in checkout + polish | 2–3 days | 10A | **Shipped** |
 
 ---
 

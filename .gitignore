@@ -4,9 +4,14 @@ node_modules/
 .env
 .env.*
 !.env.example
+!.env.e2e.example
 dist/
 *.log
 .DS_Store
 
 # Local Postman env (secrets) — keep `*.example.postman_environment.json` in git only
 postman/*.local.postman_environment.json
+
+# Playwright
+test-results/
+playwright-report/

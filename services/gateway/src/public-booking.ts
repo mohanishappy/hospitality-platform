@@ -6,6 +6,12 @@ const availabilityRe = new RegExp(
   `^/v1/inventory/hotels/${uuidSegment}/room-types/${uuidSegment}/availability$`
 );
 const createReservationRe = /^\/v1\/reservations$/;
+const createSoftHoldRe = new RegExp(
+  `^/v1/inventory/hotels/${uuidSegment}/room-types/${uuidSegment}/soft-holds$`
+);
+const releaseSoftHoldRe = new RegExp(
+  `^/v1/inventory/soft-holds/${uuidSegment}$`
+);
 const listChainsRe = /^\/v1\/inventory\/chains$/;
 const chainByCodeRe = /^\/v1\/inventory\/chains\/[^/]+$/;
 const listEnterprisesRe = /^\/v1\/inventory\/enterprises$/;
@@ -24,6 +30,8 @@ export function isPublicBookingRoute(method: string, path: string): boolean {
   if (m === "GET" && hotelsRe.test(path)) return true;
   if (m === "GET" && availabilityRe.test(path)) return true;
   if (m === "POST" && createReservationRe.test(path)) return true;
+  if (m === "POST" && createSoftHoldRe.test(path)) return true;
+  if (m === "DELETE" && releaseSoftHoldRe.test(path)) return true;
   return false;
 }
 

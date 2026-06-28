@@ -34,6 +34,7 @@ export function useTenantPath(): {
       setAdminRoute(parseEnterpriseAdminFromPath(path));
       setEnterpriseCode(parseEnterpriseAdminFromPath(path) ? null : parseEnterpriseCodeFromPath(path));
     };
+    sync();
     window.addEventListener("popstate", sync);
     return () => window.removeEventListener("popstate", sync);
   }, []);

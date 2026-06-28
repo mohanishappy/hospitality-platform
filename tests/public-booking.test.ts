@@ -28,6 +28,21 @@ describe("isPublicBookingRoute", () => {
     expect(isPublicBookingRoute("POST", "/v1/reservations")).toBe(true);
   });
 
+  it("allows anonymous soft hold create and release", () => {
+    const hotel = "11111111-1111-4111-8111-111111111111";
+    const room = "22222222-2222-4222-8222-222222222222";
+    const hold = "33333333-3333-4333-8333-333333333333";
+    expect(
+      isPublicBookingRoute(
+        "POST",
+        `/v1/inventory/hotels/${hotel}/room-types/${room}/soft-holds`
+      )
+    ).toBe(true);
+    expect(
+      isPublicBookingRoute("DELETE", `/v1/inventory/soft-holds/${hold}`)
+    ).toBe(true);
+  });
+
   it("denies staff-only routes", () => {
     expect(isPublicBookingRoute("GET", "/v1/reservations")).toBe(false);
     expect(

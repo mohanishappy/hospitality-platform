@@ -37,6 +37,6 @@ Aligned with [`REQUIREMENTS.md`](REQUIREMENTS.md) **§2** backlog and [`IMPLEMEN
 
 **Migrations:** apply through [`0019_staff_invite_db_roles.sql`](../supabase/migrations/0019_staff_invite_db_roles.sql). **`0020`** (demo pricing seed) — Phase **10B**.
 
-**Phase 10:** see [`PHASE10_PLAN.md`](PHASE10_PLAN.md). **10A–10E** shipped (guest promo, BAR seed, catalog admin, Rates + Availability UI). **10F** soft holds in checkout next.
+**Phase 10:** see [`PHASE10_PLAN.md`](PHASE10_PLAN.md). **10A–10F** shipped (guest promo, BAR seed, catalog admin, Rates + Availability UI, checkout soft holds).
 
 **Demo seed (0014 + 0020):** chain **`DEMO`** — **`LOS3`** (3+ nights @ **9000** cents/night on **DEMO-H1** `STD-QN`); **`SAVE5`** (500 bps off); all brands have **`base_rate_cents`** after **0020**.

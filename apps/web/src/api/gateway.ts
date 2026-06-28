@@ -73,6 +73,15 @@ export type AvailabilityResponse = {
   availability: AvailabilityQuote;
 };
 
+export type SoftHoldResult = {
+  hold_id: string;
+  expires_at: string;
+};
+
+export type SoftHoldResponse = {
+  soft_hold: SoftHoldResult;
+};
+
 export type GuestInput = {
   first_name: string;
   last_name: string;
@@ -1015,6 +1024,58 @@ export function fetchAvailability(
     gatewayUrl,
     `/v1/inventory/hotels/${params.hotelId}/room-types/${params.roomTypeId}/availability?${qs.toString()}`,
     { headers }
+  );
+}
+
+export const DEFAULT_SOFT_HOLD_TTL_SECONDS = 900;
+
+export function createSoftHold(
+  gatewayUrl: string,
+  auth: BookingAuth | string,
+  params: {
+    hotelId: string;
+    roomTypeId: string;
+    checkIn: string;
+    checkOut: string;
+    ttlSeconds?: number;
+    unitsHeld?: number;
+  }
+) {
+  const headers: Record<string, string> = {
+    ...(typeof auth === "string"
+      ? { Authorization: `Bearer ${auth}` }
+      : bookingAuthHeaders(auth)),
+    "Content-Type": "application/json",
+  };
+  return gatewayFetch<SoftHoldResponse>(
+    gatewayUrl,
+    `/v1/inventory/hotels/${params.hotelId}/room-types/${params.roomTypeId}/soft-holds`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        check_in: params.checkIn,
+        check_out: params.checkOut,
+        ttl_seconds: params.ttlSeconds ?? DEFAULT_SOFT_HOLD_TTL_SECONDS,
+        units_held: params.unitsHeld ?? 1,
+      }),
+    }
+  );
+}
+
+export function releaseSoftHold(
+  gatewayUrl: string,
+  auth: BookingAuth | string,
+  holdId: string
+) {
+  const headers =
+    typeof auth === "string"
+      ? { Authorization: `Bearer ${auth}` }
+      : bookingAuthHeaders(auth);
+  return gatewayFetch<{ result: { released: boolean } }>(
+    gatewayUrl,
+    `/v1/inventory/soft-holds/${holdId}`,
+    { method: "DELETE", headers }
   );
 }
 

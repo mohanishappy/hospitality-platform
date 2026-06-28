@@ -22,11 +22,9 @@ createRoot(document.getElementById("root")!).render(
         cacheLocation="localstorage"
         useRefreshTokensFallback
         onRedirectCallback={(appState) => {
-          window.history.replaceState(
-            {},
-            document.title,
-            appState?.returnTo ?? window.location.pathname
-          );
+          const target = appState?.returnTo ?? window.location.pathname;
+          window.history.replaceState({}, document.title, target);
+          window.dispatchEvent(new PopStateEvent("popstate"));
         }}
       >
         <App config={config} />

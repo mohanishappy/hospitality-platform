@@ -13,6 +13,10 @@
     "test:watch": "vitest",
     "smoke:deploy": "node scripts/smoke-deploy-public.mjs",
     "smoke:api": "node scripts/smoke-api.mjs",
+    "smoke:admin": "node scripts/smoke-admin-api.mjs",
+    "auth0:token": "node scripts/auth0-password-token.mjs",
+    "e2e:admin": "playwright test e2e/admin-portal.spec.ts",
+    "test:admin": "node scripts/run-admin-tests.mjs",
     "smoke:newman": "node scripts/run-newman.mjs",
     "typecheck": "npm run typecheck:inventory && npm run typecheck:reservations && npm run typecheck:gateway && npm run typecheck:web",
     "typecheck:inventory": "cd services/inventory && npx tsc --noEmit",
@@ -34,6 +38,7 @@
     "node": ">=20"
   },
   "devDependencies": {
+    "@playwright/test": "^1.52.0",
     "newman": "^6.2.1",
     "typescript": "^5.7.2",
     "vitest": "^3.0.9",

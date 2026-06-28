@@ -33,6 +33,7 @@ const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
   read_only: [],
   guest: [
     "inventory:read",
+    "inventory:write",
     "reservations:read",
     "reservations:create",
     "reservations:cancel",

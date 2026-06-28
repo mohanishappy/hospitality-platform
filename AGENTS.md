@@ -212,6 +212,8 @@ npm test              # Vitest
 npm run typecheck     # all services + web
 npm run smoke:deploy  # public routes (needs GATEWAY_BASE_URL)
 npm run smoke:api     # golden path (needs SMOKE_ACCESS_TOKEN)
+npm run smoke:admin   # admin catalog API (needs SMOKE_MANAGER_TOKEN) — see docs/UI_TESTING.md
+npm run e2e:admin     # Playwright admin UI (needs .env.e2e)
 ```
 
 **CI (`.github/workflows/ci.yml`):** on every PR/push — test + typecheck; on **main** — Supabase `db push`, deploy workers + Pages, smoke.

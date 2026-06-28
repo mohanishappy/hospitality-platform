@@ -2,14 +2,17 @@ import { useAuth0 } from "@auth0/auth0-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createReservation,
+  createSoftHold,
   fetchAvailability,
   fetchHotels,
   fetchSearch,
+  releaseSoftHold,
   type AvailabilityQuote,
   type BookingAuth,
   type HotelSummary,
   type InventorySearchHit,
   type ReservationDetail,
+  type SoftHoldResult,
 } from "../api/gateway";
 import { useGatewayToken } from "../hooks/useGatewayToken";
 import { defaultStayDates, formatMoney } from "../lib/format";
@@ -32,6 +35,7 @@ type Phase =
       name: "book";
       hit: InventorySearchHit;
       quote: AvailabilityQuote;
+      softHold: SoftHoldResult;
       idempotencyKey: string;
       promotionCode: string;
       ratePlanCode: string | null;
@@ -42,6 +46,44 @@ type Phase =
       reservation: ReservationDetail;
       idempotentReplay: boolean;
     };
+
+function HoldExpiryNotice({ expiresAt }: { expiresAt: string }) {
+  const [remainingSec, setRemainingSec] = useState(() =>
+    Math.max(0, Math.floor((Date.parse(expiresAt) - Date.now()) / 1000))
+  );
+
+  useEffect(() => {
+    const tick = () => {
+      setRemainingSec(
+        Math.max(0, Math.floor((Date.parse(expiresAt) - Date.now()) / 1000))
+      );
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [expiresAt]);
+
+  if (remainingSec <= 0) {
+    return (
+      <p className="error">
+        Your hold has expired. Start over and select the room again.
+      </p>
+    );
+  }
+
+  const minutes = Math.floor(remainingSec / 60);
+  const seconds = remainingSec % 60;
+  const label =
+    minutes > 0
+      ? `${minutes}m ${seconds.toString().padStart(2, "0")}s`
+      : `${seconds}s`;
+
+  return (
+    <p className="muted hold-expiry">
+      Room held for you — complete booking within <strong>{label}</strong>.
+    </p>
+  );
+}
 
 function QuoteBreakdown({ quote }: { quote: AvailabilityQuote }) {
   const pricing = quote.pricing;
@@ -143,6 +185,26 @@ export function BookingPanel({ gatewayUrl, audience, chainCode }: Props) {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
 
+  const activeHoldRef = useRef<SoftHoldResult | null>(null);
+
+  const releaseActiveHold = useCallback(async () => {
+    const hold = activeHoldRef.current;
+    if (!hold) return;
+    activeHoldRef.current = null;
+    try {
+      const auth = await resolveAuth();
+      await releaseSoftHold(gatewayUrl, auth, hold.hold_id);
+    } catch {
+      /* best-effort release */
+    }
+  }, [gatewayUrl, resolveAuth]);
+
+  useEffect(() => {
+    return () => {
+      void releaseActiveHold();
+    };
+  }, [releaseActiveHold]);
+
   useEffect(() => {
     if (!user) return;
     setEmail((current) => current || user.email || "");
@@ -171,10 +233,11 @@ export function BookingPanel({ gatewayUrl, audience, chainCode }: Props) {
   }, [chainCode, gatewayUrl, resolveAuth]);
 
   const resetBooking = useCallback(() => {
+    void releaseActiveHold();
     setPhase({ name: "search" });
     setError(null);
     setBusy(false);
-  }, []);
+  }, [releaseActiveHold]);
 
   const runSearch = useCallback(async () => {
     setBusy(true);
@@ -230,10 +293,18 @@ export function BookingPanel({ gatewayUrl, audience, chainCode }: Props) {
           setError("This room is no longer bookable for those dates.");
           return;
         }
+        const holdData = await createSoftHold(gatewayUrl, auth, {
+          hotelId: hit.hotel_id,
+          roomTypeId: hit.room_type_id,
+          checkIn: hit.check_in,
+          checkOut: hit.check_out,
+        });
+        activeHoldRef.current = holdData.soft_hold;
         setPhase({
           name: "book",
           hit,
           quote,
+          softHold: holdData.soft_hold,
           idempotencyKey: crypto.randomUUID(),
           promotionCode: promo,
           ratePlanCode: quote.pricing?.rate_plan_code?.trim() ?? ratePlanCode ?? null,
@@ -249,6 +320,10 @@ export function BookingPanel({ gatewayUrl, audience, chainCode }: Props) {
 
   const submitBooking = useCallback(async () => {
     if (phase.name !== "book") return;
+    if (Date.parse(phase.softHold.expires_at) <= Date.now()) {
+      setError("Your hold has expired. Start over and select the room again.");
+      return;
+    }
     if (!firstName.trim() || !lastName.trim() || !email.trim()) {
       setError("Guest first name, last name, and email are required.");
       return;
@@ -284,12 +359,13 @@ export function BookingPanel({ gatewayUrl, audience, chainCode }: Props) {
         reservation: data.reservation,
         idempotentReplay: data.idempotent_replay,
       });
+      await releaseActiveHold();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Booking failed");
     } finally {
       setBusy(false);
     }
-  }, [email, firstName, gatewayUrl, lastName, phase, resolveAuth]);
+  }, [email, firstName, gatewayUrl, lastName, phase, releaseActiveHold, resolveAuth]);
 
   if (phase.name === "done") {
     const snap = phase.reservation.pricing_snapshot;
@@ -481,6 +557,8 @@ export function BookingPanel({ gatewayUrl, audience, chainCode }: Props) {
           </p>
 
           <QuoteBreakdown quote={phase.quote} />
+
+          <HoldExpiryNotice expiresAt={phase.softHold.expires_at} />
 
           <form
             className="guest-form"
