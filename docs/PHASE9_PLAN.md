@@ -116,12 +116,14 @@ Single shell at **`/e/:code/admin`** with **Staff** and **Brands** sections (mer
 
 | Work | Deliverable |
 |------|-------------|
-| Auth | Separate Auth0 SPA; `platform_operator` via DB + Action |
+| Auth | `platform_operator` via DB + Action |
 | `POST /v1/inventory/platform/enterprises` | Create enterprise only — **no brands** |
 | Bootstrap invite | Reuse invite service → first all-chain manager (`intended_role: manager`) |
 | UI | `/platform/*` — list/create enterprise; send bootstrap invite |
 
 **Exit:** New tenant without SQL bootstrap.
+
+**Status:** **Shipped** — API + Platform Portal UI at `/platform`.
 
 **Depends on:** 9B invite service + zero-brand gateway bypass.
 
@@ -144,9 +146,11 @@ UI ships in **9D** shell (Brands tab). Platform Portal does **not** create brand
 | Work | Deliverable |
 |------|-------------|
 | `enterprise.active` | Gateway 403 when suspended; Platform toggle |
-| Cache | Optional purge after admin writes (or document 60s TTL) |
-| Audit (optional) | `granted_by` on grants (`granted_at` exists) |
+| Cache | Document 60s gateway TTL (see [`UI_TESTING.md`](UI_TESTING.md)) |
+| Audit (optional) | `granted_by` on grants (`granted_at` exists) — **deferred** |
 | SPA copy | Update `accessWarning` messages — no SQL references |
+
+**Status:** **Shipped** — suspend/reactivate in Platform Portal; gateway enforces `enterprise.active`; zero-brand admin bypass fixed in middleware.
 
 ---
 

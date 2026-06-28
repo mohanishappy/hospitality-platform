@@ -43,8 +43,22 @@ export async function getInternalStaffClaims(c: Context<{ Bindings: Env }>) {
   }
 
   const claims = pickStaffClaimsForEmail(data ?? []);
-  if (!claims) {
-    return c.json({});
+  if (claims) {
+    return c.json(claims);
   }
-  return c.json(claims);
+
+  const { data: platformRows, error: platformErr } = await supa
+    .schema("inventory")
+    .from("platform_operator")
+    .select("active,updated_at")
+    .eq("email", email)
+    .maybeSingle();
+  if (platformErr) {
+    return problem(500, "Database error", formatPostgrestError(platformErr));
+  }
+  if (platformRows && platformRows.active !== false) {
+    return c.json({ roles: ["platform_operator"] });
+  }
+
+  return c.json({});
 }

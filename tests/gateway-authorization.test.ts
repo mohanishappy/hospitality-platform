@@ -202,6 +202,30 @@ describe("effectivePermissions", () => {
     expect(hasPermission(perms, ["reservations:confirm"])).toBe(false);
     expect(hasPermission(perms, ["reservations:cancel"])).toBe(false);
   });
+
+  it("grants platform_operator platform:admin only", () => {
+    const perms = effectivePermissions({ sub: "u" }, ["platform_operator"]);
+    expect(hasPermission(perms, ["platform:admin"])).toBe(true);
+    expect(hasPermission(perms, ["staff:admin"])).toBe(false);
+    expect(hasPermission(perms, ["inventory:read"])).toBe(false);
+  });
+});
+
+describe("requiredPermissions platform routes", () => {
+  it("requires platform:admin for platform enterprise APIs", () => {
+    expect(
+      requiredPermissions("GET", "/v1/inventory/platform/enterprises")
+    ).toEqual(["platform:admin"]);
+    expect(
+      requiredPermissions("POST", "/v1/inventory/platform/enterprises")
+    ).toEqual(["platform:admin"]);
+    expect(
+      requiredPermissions(
+        "PATCH",
+        "/v1/inventory/platform/enterprises/00000000-0000-0000-0000-000000000001"
+      )
+    ).toEqual(["platform:admin"]);
+  });
 });
 
 describe("enforcePublicBookingAuthorization", () => {

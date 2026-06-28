@@ -213,7 +213,7 @@ Block reduces calendar remaining units; min LOS enforced in search.
 - [x] Shared helpers in `admin-catalog.ts` (enterprise + brand scope)
 - [x] Gateway + route-scope for `/admin/chains|hotels|room-types`
 - [x] Postman **01c — Admin catalog**
-- [ ] OpenAPI schemas for catalog routes
+- [ ] OpenAPI schemas for catalog routes (platform + core admin in OpenAPI; full catalog schemas optional)
 - [x] SPA: Properties tab UI (**10C**)
 - [x] Vitest: gateway permission tests for catalog routes
 

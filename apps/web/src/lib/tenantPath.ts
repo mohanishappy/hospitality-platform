@@ -2,6 +2,7 @@ const CHAIN_PATH_RE = /^\/c\/([A-Za-z0-9_-]+)\/?$/;
 const ENTERPRISE_PATH_RE = /^\/e\/([A-Za-z0-9_-]+)\/?$/;
 const ENTERPRISE_ADMIN_RE = /^\/e\/([A-Za-z0-9_-]+)\/admin(?:\/([a-z]+))?\/?$/;
 const INVITE_ACCEPT_PATH = /^\/invite\/accept\/?$/;
+const PLATFORM_PATH = /^\/platform\/?$/;
 
 export type EnterpriseAdminTab =
   | "staff"
@@ -59,4 +60,12 @@ export function chainPath(code: string): string {
 
 export function enterprisePath(code: string): string {
   return `/e/${encodeURIComponent(code.trim())}`;
+}
+
+export function isPlatformPath(pathname: string): boolean {
+  return PLATFORM_PATH.test(pathname);
+}
+
+export function platformPath(): string {
+  return "/platform";
 }

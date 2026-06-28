@@ -93,6 +93,10 @@ Expect `{"ok":true}`. If that works on your machine but `npm run smoke:admin` fa
 
 If `/health` fails everywhere, redeploy: `npm run deploy:gateway`.
 
+## Gateway cache (admin writes)
+
+The gateway caches enterprise chain lists and enterprise metadata for **~60 seconds** after lookup. After creating a brand or changing staff grants, staff may need to **sign out and sign in again** (or wait up to 60s) before `/me/chains` and brand-scoped admin APIs reflect the change. Platform ops creating a new enterprise with zero brands can use admin routes immediately (zero-brand bypass).
+
 | Service | URL |
 |---------|-----|
 | Web | https://hospitality-web-bfc.pages.dev |

@@ -5,9 +5,10 @@ import { BrandHeader } from "./components/BrandHeader";
 import { CalendarPanel } from "./components/CalendarPanel";
 import { EnterpriseAdminPage } from "./components/EnterpriseAdminPage";
 import { EnterprisePage } from "./components/EnterprisePage";
-import { PanelErrorBoundary } from "./components/ErrorBoundary";
+import { PlatformPage } from "./components/PlatformPage";
 import { HomePage } from "./components/HomePage";
 import { InviteAcceptPage } from "./components/InviteAcceptPage";
+import { PanelErrorBoundary } from "./components/ErrorBoundary";
 import { ReservationsPanel } from "./components/ReservationsPanel";
 import { SiteFooter } from "./components/SiteFooter";
 import {
@@ -113,7 +114,8 @@ function ChainSite({ config, chainCode }: { config: AppConfig; chainCode: string
 }
 
 export function App({ config }: Props) {
-  const { chainCode, enterpriseCode, adminRoute } = useTenantPath();
+  const { chainCode, enterpriseCode, adminRoute, isPlatformPortal } =
+    useTenantPath();
 
   useEffect(() => {
     const path = consumePostLogoutReturn();
@@ -125,6 +127,10 @@ export function App({ config }: Props) {
   if (isInviteAcceptPath(window.location.pathname)) {
     const token = parseInviteTokenFromSearch(window.location.search);
     return <InviteAcceptPage config={config} token={token} />;
+  }
+
+  if (isPlatformPortal) {
+    return <PlatformPage config={config} />;
   }
 
   if (adminRoute) {

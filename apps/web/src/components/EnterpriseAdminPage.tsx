@@ -61,7 +61,7 @@ function AdminShell({
     roles,
     loading: claimsLoading,
   } = useAccessClaims();
-  const { navigateToEnterpriseAdmin } = useTenantPath();
+  const { navigateToEnterpriseAdmin, navigateToEnterprise } = useTenantPath();
 
   const loading = authLoading || (isAuthenticated && ready && claimsLoading);
 
@@ -69,12 +69,25 @@ function AdminShell({
     <div className="app">
       <header className="site-header">
         <div className="site-brand">
-          <a href={enterprisePath(enterpriseCode)} className="site-brand-link">
+          <button
+            type="button"
+            className="site-brand-link"
+            onClick={() => navigateToEnterprise(enterpriseCode)}
+          >
             {enterpriseName}
-          </a>
+          </button>
           <span className="admin-badge">Admin</span>
         </div>
-        <AuthBar audience={config.auth0Audience} />
+        <div className="header-actions">
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => navigateToEnterprise(enterpriseCode)}
+          >
+            ← Staff portal
+          </button>
+          <AuthBar audience={config.auth0Audience} />
+        </div>
       </header>
 
       <nav className="admin-nav" aria-label="Enterprise admin">

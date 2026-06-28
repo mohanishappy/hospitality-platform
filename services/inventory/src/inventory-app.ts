@@ -6,6 +6,7 @@ import { getHotel } from "./handlers/hotel-detail";
 import { getChainByCode, listChains } from "./handlers/chains";
 import {
   getEnterpriseByCode,
+  getEnterpriseById,
   listEnterpriseChains,
   listEnterpriseChainsById,
   listEnterprises,
@@ -53,10 +54,17 @@ import {
 import { getMyChains, getStaffAccess } from "./handlers/staff-access";
 import { getInternalStaffClaims } from "./handlers/staff-claims";
 import { acceptStaffInvite, createStaffInvite } from "./handlers/staff-invite";
+import {
+  createPlatformBootstrapInvite,
+  createPlatformEnterprise,
+  listPlatformEnterprises,
+  patchPlatformEnterprise,
+} from "./handlers/platform-enterprises";
 
 export function inventoryApp() {
   const r = new Hono<{ Bindings: Env }>();
   r.get("/enterprises", listEnterprises);
+  r.get("/enterprises/by-id/:enterpriseId", getEnterpriseById);
   r.get("/enterprises/by-id/:enterpriseId/chains", listEnterpriseChainsById);
   r.get("/enterprises/:code", getEnterpriseByCode);
   r.get("/enterprises/:code/chains", listEnterpriseChains);
@@ -64,6 +72,13 @@ export function inventoryApp() {
   r.get("/internal/staff/claims", getInternalStaffClaims);
   r.get("/me/chains", getMyChains);
   r.post("/invites/accept", acceptStaffInvite);
+  r.get("/platform/enterprises", listPlatformEnterprises);
+  r.post("/platform/enterprises", createPlatformEnterprise);
+  r.patch("/platform/enterprises/:enterpriseId", patchPlatformEnterprise);
+  r.post(
+    "/platform/enterprises/:enterpriseId/bootstrap-invite",
+    createPlatformBootstrapInvite
+  );
   r.get("/admin/staff", listAdminStaff);
   r.post("/admin/staff", createAdminStaff);
   r.post("/admin/staff/invite", createStaffInvite);

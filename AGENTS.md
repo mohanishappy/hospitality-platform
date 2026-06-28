@@ -122,7 +122,7 @@ Demo enterprise UUID: `eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee` (Palladium Lodging 
 | `/c/:chainCode` | Brand site — booking, calendar, reservations |
 | `/e/:code` | Enterprise hub — brand picker + cross-brand staff tools |
 | `/e/:code/admin/*` | Enterprise Admin Portal (**planned 9D**) |
-| `/platform/*` | Platform Portal (**planned 9E**) |
+| `/platform/*` | Platform Portal (**9E** — `/platform`) |
 | `/invite/accept?token=` | Invite accept (**planned 9B**) |
 
 ---
@@ -230,9 +230,9 @@ Tracker: [`docs/PHASE9_PLAN.md`](docs/PHASE9_PLAN.md).
 | **9B** | Migration 0019, invite/accept, internal claims API, Action update, gateway zero-brand bypass |
 | **9C** | Email delivery |
 | **9D** | Enterprise Admin Portal (staff + brands UI) |
-| **9E** | Platform Portal + `POST /v1/inventory/platform/enterprises` |
+| **9E** | Platform Portal + `POST /v1/inventory/platform/enterprises` | **shipped** |
 | **9F** | Admin brand CRUD API |
-| **9G** | `enterprise.active`, cache/audit polish |
+| **9G** | `enterprise.active`, cache docs, zero-brand fix | **shipped** |
 
 **Phase 10** (catalog, rates, booking UX): [`docs/PHASE10_PLAN.md`](docs/PHASE10_PLAN.md) — **10A/10B** in progress.
 

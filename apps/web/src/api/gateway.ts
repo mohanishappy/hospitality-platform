@@ -187,6 +187,8 @@ export type EnterpriseSummary = {
   id: string;
   code: string;
   name: string;
+  active?: boolean;
+  created_at?: string;
 };
 
 export type EnterprisesResponse = {
@@ -345,6 +347,88 @@ export function fetchEnterpriseChains(gatewayUrl: string, enterpriseCode: string
   return gatewayFetch<ChainsResponse>(
     gatewayUrl,
     `/v1/inventory/enterprises/${encodeURIComponent(enterpriseCode.trim().toUpperCase())}/chains`
+  );
+}
+
+export type PlatformInviteResult = {
+  invite: {
+    staff_member_id: string;
+    email: string;
+    intended_role: string;
+    all_chains: boolean;
+    status: string;
+    expires_at: string;
+    accept_url: string;
+  };
+};
+
+export function fetchPlatformEnterprises(
+  gatewayUrl: string,
+  accessToken: string
+) {
+  return gatewayFetch<EnterprisesResponse>(
+    gatewayUrl,
+    "/v1/inventory/platform/enterprises",
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+}
+
+export function createPlatformEnterprise(
+  gatewayUrl: string,
+  accessToken: string,
+  body: { name: string; code: string }
+) {
+  return gatewayFetch<EnterpriseResponse>(
+    gatewayUrl,
+    "/v1/inventory/platform/enterprises",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export function patchPlatformEnterprise(
+  gatewayUrl: string,
+  accessToken: string,
+  enterpriseId: string,
+  body: { name?: string; active?: boolean }
+) {
+  return gatewayFetch<EnterpriseResponse>(
+    gatewayUrl,
+    `/v1/inventory/platform/enterprises/${encodeURIComponent(enterpriseId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export function createPlatformBootstrapInvite(
+  gatewayUrl: string,
+  accessToken: string,
+  enterpriseId: string,
+  body: { email: string; display_name?: string }
+) {
+  return gatewayFetch<PlatformInviteResult>(
+    gatewayUrl,
+    `/v1/inventory/platform/enterprises/${encodeURIComponent(enterpriseId)}/bootstrap-invite`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }
   );
 }
 

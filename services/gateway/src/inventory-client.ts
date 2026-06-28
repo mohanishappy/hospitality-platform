@@ -7,11 +7,19 @@ export type ChainSummary = {
   enterprise_id?: string;
 };
 
+export type EnterpriseMeta = {
+  id: string;
+  code: string;
+  name: string;
+  active: boolean;
+};
+
 const CACHE_TTL_MS = 60_000;
 
 type CacheEntry<T> = { value: T; expiresAt: number };
 
 const enterpriseChainsCache = new Map<string, CacheEntry<ChainSummary[]>>();
+const enterpriseMetaCache = new Map<string, CacheEntry<EnterpriseMeta | null>>();
 const chainByCodeCache = new Map<string, CacheEntry<ChainSummary | null>>();
 
 function cacheGet<T>(map: Map<string, CacheEntry<T>>, key: string): T | undefined {
@@ -38,6 +46,23 @@ async function inventoryJson<T>(
   );
   if (!res.ok) return null;
   return (await res.json()) as T;
+}
+
+export async function fetchEnterpriseById(
+  env: GatewayEnv,
+  enterpriseId: string
+): Promise<EnterpriseMeta | null> {
+  const normalized = enterpriseId.trim();
+  const cached = cacheGet(enterpriseMetaCache, normalized);
+  if (cached !== undefined) return cached;
+
+  const data = await inventoryJson<{ enterprise?: EnterpriseMeta }>(
+    env,
+    `/v1/inventory/enterprises/by-id/${encodeURIComponent(normalized)}`
+  );
+  const enterprise = data?.enterprise ?? null;
+  cacheSet(enterpriseMetaCache, normalized, enterprise);
+  return enterprise;
 }
 
 export async function fetchEnterpriseChainsById(
@@ -79,5 +104,6 @@ export async function resolveChainByCode(
 /** Test helper — clears in-memory caches between cases. */
 export function clearInventoryClientCache() {
   enterpriseChainsCache.clear();
+  enterpriseMetaCache.clear();
   chainByCodeCache.clear();
 }

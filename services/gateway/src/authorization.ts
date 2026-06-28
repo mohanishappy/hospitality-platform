@@ -14,7 +14,8 @@ export type Permission =
   | "reservations:confirm"
   | "reservations:cancel"
   | "reservations:notes"
-  | "staff:admin";
+  | "staff:admin"
+  | "platform:admin";
 
 const ALL_PERMISSIONS: Permission[] = [
   "inventory:read",
@@ -26,6 +27,7 @@ const ALL_PERMISSIONS: Permission[] = [
   "reservations:cancel",
   "reservations:notes",
   "staff:admin",
+  "platform:admin",
 ];
 
 const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
@@ -54,6 +56,7 @@ const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
     "reservations:read",
     "reservations:create",
   ],
+  platform_operator: ["platform:admin"],
 };
 
 function permissionsForRoles(roles: string[]): Set<Permission> {
@@ -108,6 +111,10 @@ export function requiredPermissions(
 ): Permission[] {
   const m = method.toUpperCase();
   if (path.startsWith("/v1/inventory")) {
+    if (path.startsWith("/v1/inventory/platform/")) {
+      if (m === "GET") return ["platform:admin"];
+      if (m === "POST" || m === "PATCH" || m === "PUT") return ["platform:admin"];
+    }
     if (path.startsWith("/v1/inventory/admin/staff")) {
       if (m === "GET") return ["staff:admin"];
       if (m === "POST" || m === "PATCH" || m === "PUT") return ["staff:admin"];

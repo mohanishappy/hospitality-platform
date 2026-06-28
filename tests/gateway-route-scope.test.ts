@@ -53,4 +53,13 @@ describe("allowsEmptyChainScope", () => {
       )
     ).toBe(true);
   });
+
+  it("allows platform routes without brand scope", () => {
+    expect(
+      allowsEmptyChainScope("GET", "/v1/inventory/platform/enterprises")
+    ).toBe(true);
+    expect(
+      allowsEmptyChainScope("POST", "/v1/inventory/platform/enterprises")
+    ).toBe(true);
+  });
 });

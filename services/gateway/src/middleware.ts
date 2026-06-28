@@ -21,6 +21,7 @@ import {
   staffScopeForbiddenDetail,
 } from "./chain-scope";
 import {
+  fetchEnterpriseById,
   fetchEnterpriseChainsById,
   resolveChainByCode,
 } from "./inventory-client";
@@ -142,11 +143,32 @@ export const requireAuthAndChain: MiddlewareHandler<{
     let chainIds: string[] = [];
     let staffAccess = null;
     if (enterpriseId) {
+      const enterprise = await fetchEnterpriseById(c.env, enterpriseId);
+      if (!enterprise) {
+        return problem(
+          403,
+          "Forbidden",
+          "Enterprise not found or enterprise_id is invalid",
+          "about:blank#unknown-enterprise"
+        );
+      }
+      if (enterprise.active === false) {
+        return problem(
+          403,
+          "Forbidden",
+          "Enterprise is suspended",
+          "about:blank#enterprise-suspended"
+        );
+      }
+
       const enterpriseChains = await fetchEnterpriseChainsById(
         c.env,
         enterpriseId
       );
-      if (enterpriseChains.length === 0) {
+      if (
+        enterpriseChains.length === 0 &&
+        !allowsEmptyChainScope(method, p)
+      ) {
         return problem(
           403,
           "Forbidden",
