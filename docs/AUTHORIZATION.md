@@ -1,249 +1,563 @@
 # Authorization and multi-brand access
 
-**Canonical design** for tenancy, roles, and brand scope. Operational setup (Auth0 Action snippet, SQL provisioning) stays in [`README.md`](../README.md) §2; this document explains **why** and **what comes next**.
 
-**Migrations:** [`0017_enterprise.sql`](../supabase/migrations/0017_enterprise.sql), [`0018_staff_brand_access.sql`](../supabase/migrations/0018_staff_brand_access.sql)
+
+**Canonical design** for tenancy, roles, and brand scope. Auth0 setup snippets: [`README.md`](../README.md) §2. Implementation phases: [`PHASE9_PLAN.md`](PHASE9_PLAN.md).
+
+
+
+**Migrations:** [`0017_enterprise.sql`](../supabase/migrations/0017_enterprise.sql), [`0018_staff_brand_access.sql`](../supabase/migrations/0018_staff_brand_access.sql), **`0019`** (invite + DB roles — Phase **9B**).
+
+
 
 ---
 
-## Separation of concerns
+
+
+## Authorization model (decision)
+
+
 
 | Layer | Owns | Does not own |
+
 |-------|------|----------------|
-| **Auth0** | Identity (`sub`, email), coarse **roles** (`guest`, `front_desk`, `manager`), **`enterprise_id`** claim | Brand UUID lists, per-user chain grants, hotel-level scope |
-| **Database** (`inventory.staff_member`, grants) | **Who** may access **which brands** within an enterprise | JWT verification, HTTP route permission matrix |
-| **Gateway** | Verify JWT, resolve brand scope (via inventory), enforce **route policies** from roles, forward **`x-chain-ids`** / **`x-chain-id`** | Direct SQL; workers remain the only DB writers for business data |
-| **Inventory worker** | Enterprise catalog, **staff grant lookup** internal API, **`GET /me/chains`** | Reservation guest email scoping |
-| **Reservations worker** | Guest “my bookings” filter by **`x-user-email`**; reservation **`chain_id`** in allowed set | Staff provisioning |
+
+| **Auth0** | Identity (`sub`, email), login/MFA/SSO, **global block** (user cannot sign in) | Per-user app roles, brand scope, enterprise membership |
+
+| **Database** (`staff_member`, grants, invites) | **Enterprise**, **intended_role**, brand grants, pending/active lifecycle | JWT verification, HTTP route permission matrix |
+
+| **Post Login Action** | Copy **`enterprise_id`** + **`roles`** from DB onto JWT at login | Business logic; uses inventory internal claims API |
+
+| **Gateway** | Verify JWT, resolve brand scope, enforce route policies from **`roles` claim**, forward headers | Direct SQL |
+
+| **Inventory worker** | Staff/invite CRUD, claims lookup, catalog | Reservation guest scoping |
+
+| **Reservations worker** | Guest bookings by **`x-user-email`**; **`chain_id`** in allowed set | Staff provisioning |
+
+
+
+**Per-user Auth0 RBAC assignment is not used** for app permissions. Role names (`guest`, `front_desk`, `manager`, …) still appear on the JWT — the Action sets them from **`staff_member.intended_role`**, not from the Auth0 Dashboard.
+
+
+
+**Auth0 remains authoritative for:** sign-up, credentials, MFA, SSO, and **blocking a user account globally** (instant revoke regardless of DB).
+
+
+
+**DB remains authoritative for:** enterprise membership, app role, brand scope, in-app disable (`status = disabled`).
+
+
+
+---
+
+
 
 ## Identity provider (Auth0) vs application database
 
-Authentication and authorization are split on purpose:
+
 
 | Auth0 (identity) | Application DB (authorization data) |
+
 |------------------|-------------------------------------|
-| Login, MFA, password reset, SSO | Staff provisioning (`staff_member`) |
-| Issuing signed JWTs (`sub`, email) | Brand grants (`staff_chain_grant`) |
-| Coarse **roles** on token (today) | M2M client grants (`integration_client`) |
-| Block user globally (cannot log in) | Disable staff in-app (`active = false`) |
-| M2M client registration | Which brands an integration may call |
 
-**Today:** roles on the JWT drive the gateway permission matrix; brand scope comes from the DB.
+| Login, MFA, password reset, SSO | Staff rows, invites, brand grants |
 
-**Future (thin token):** Auth0 Action sets only `sub` + `email` (+ optional `enterprise_id`); `staff_member.role` in the DB replaces Auth0 RBAC for app permissions. Documented in [Future work](#future-work-not-implemented) — not implemented yet.
+| Issuing signed JWTs (`sub`, email) | **`intended_role`**, **`enterprise_id`** (via Action) |
 
-Guests never need a `staff_member` row. Staff with an Auth0 role but **no** DB row receive **403** (not provisioned).
+| Block user globally | Disable staff (`status = disabled`) |
+
+| M2M client registration | Integration client grants |
+
+
+
+Guests never need a `staff_member` row. Users with staff-like JWT roles but **no** active DB row receive **403** (not provisioned).
+
+
+
+### Interim (shipped — until 9B)
+
+
+
+Demo/dev still uses a **hardcoded `enterprise_id`** in the Action and **Auth0 RBAC** role assignment per user, plus manual SQL for `auth0_sub`. See [Interim bootstrap](#interim-bootstrap-until-9b).
+
+
+
+### Target (Phase 9B+)
+
+
+
+No per-user Auth0 Dashboard steps. Invite → login → accept → Action reads DB → JWT has correct **`enterprise_id`** and **`roles`**.
+
+
 
 ---
 
-## Current request flow
+
+
+## Request flow
+
+
 
 ```mermaid
+
 sequenceDiagram
-  participant Client
-  participant GW as Gateway
+
+  participant User
+
+  participant Auth0
+
+  participant Action as Post Login Action
+
   participant INV as Inventory
-  participant RES as Reservations
+
+  participant Client
+
+  participant GW as Gateway
+
+
+
+  User->>Auth0: Login / signup
+
+  Auth0->>Action: Post Login
+
+  Action->>INV: GET /internal/staff/claims?email=
+
+  INV-->>Action: enterprise_id, intended_role
+
+  Action-->>Auth0: Set custom claims on tokens
+
+
 
   Client->>GW: Bearer JWT + optional x-chain-code
-  GW->>GW: Verify JWT (Auth0 JWKS)
+
+  GW->>GW: Verify JWT (JWKS)
+
   GW->>INV: GET /enterprises/by-id/:id/chains (cached)
-  alt staff or integration role
-    GW->>INV: GET /staff/access?enterprise_id&auth0_sub|client_id (cached)
+
+  alt staff or integration role on token
+
+    GW->>INV: GET /staff/access?enterprise_id&auth0_sub (cached)
+
     GW->>GW: Intersect enterprise chains with DB grants
+
   else guest
-    GW->>GW: All enterprise chains
+
+    GW->>GW: All enterprise chains (if enterprise_id present)
+
   end
-  GW->>GW: Pick active chain from x-chain-code if in scope
+
   GW->>GW: Enforce route policy (roles claim)
-  GW->>RES: x-chain-ids, x-chain-id, x-user-email, x-roles
+
 ```
 
-**Active brand:** SPA sends **`x-chain-code`** (from `/c/HBR`). Gateway resolves code → UUID via inventory and sets **`x-chain-id`** when the brand is in the caller’s allowed set.
 
-**Caching:** Gateway caches enterprise chain lists and staff access lookups for **~60 seconds**. Grant changes propagate without re-login; worst case one cache TTL delay.
+
+**Active brand:** SPA sends **`x-chain-code`** (from `/c/HBR`). Gateway resolves code → UUID and sets **`x-chain-id`** when in scope.
+
+
+
+**Caching:** Gateway caches enterprise chains and staff access ~**60 seconds**. Role/grant changes require **re-login** (or token refresh) for JWT role updates; brand grant changes apply within cache TTL without re-login.
+
+
+
+**Zero-brand enterprise:** New enterprises have no chains until the admin creates brands. Gateway must allow **empty `x-chain-ids`** for admin, invite, platform, and `/me/chains` routes so the first manager can operate (Phase **9B** gateway change).
+
+
 
 ---
+
+
 
 ## Database model
 
+
+
 ### Enterprise and brands
 
-- **`inventory.enterprise`** — hotel group (e.g. Palladium Lodging Group, code `PLG`).
-- **`inventory.chain.enterprise_id`** — each brand belongs to one enterprise.
-- Reservation rows stay **`chain_id`**-scoped (no reservation schema change for enterprise listing).
 
-### Staff brand access
+
+- **`inventory.enterprise`** — hotel group (code `PLG`). **`active`** column in **9G**.
+
+- **`inventory.chain.enterprise_id`** — each brand belongs to one enterprise.
+
+- Reservations stay **`chain_id`**-scoped.
+
+
+
+### Staff (target schema — migration **0019**)
+
+
 
 ```text
+
 inventory.staff_member
-  enterprise_id, auth0_sub, email, display_name
-  all_chains boolean   -- true = every brand in enterprise (corporate)
-  active boolean       -- false = disabled
+
+  enterprise_id, email, display_name
+
+  auth0_sub          -- null while pending; set on invite accept
+
+  status             -- pending | active | disabled
+
+  intended_role      -- manager | front_desk | read_only  → copied to JWT by Action
+
+  all_chains         -- true = every brand in enterprise
+
+  active             -- legacy; prefer status (kept for compatibility in 0019)
+
+
+
+inventory.staff_invite
+
+  staff_member_id, token_hash, expires_at
+
+  invited_by, accepted_at
+
+
 
 inventory.staff_chain_grant
-  staff_member_id, chain_id   -- used when all_chains = false
+
+  staff_member_id, chain_id   -- when all_chains = false
+
 ```
 
-**Rules:**
+
+
+**Lifecycle:**
+
+
+
+| status | auth0_sub | Meaning |
+
+|--------|-----------|---------|
+
+| `pending` | null | Invited; awaiting accept + first login |
+
+| `active` | set | Normal staff |
+
+| `disabled` | set | Revoked in-app; gateway 403 |
+
+
+
+### Access rules
+
+
 
 | Condition | Result |
-|-----------|--------|
-| Token role is **guest** | All enterprise brands; reservations filtered by email |
-| Staff, **no** `staff_member` row | **403** — not provisioned |
-| Staff, `active = false` | **403** — disabled |
-| Staff, `all_chains = true` | All enterprise brands |
-| Staff, `all_chains = false` + grants | Only listed `chain_id`s |
-| Staff, `all_chains = false`, **no** grants | **403** — no brands assigned |
 
-Identity key is JWT **`sub`** (Auth0 subject), scoped by **`enterprise_id`** on the token.
+|-----------|--------|
+
+| Token role **guest** (no staff row) | All enterprise brands if `enterprise_id` on token; reservations by email |
+
+| Staff role on token, **no** active row / sub mismatch | **403** — not provisioned |
+
+| `status = disabled` or `active = false` | **403** — disabled |
+
+| `all_chains = true` | All enterprise brands |
+
+| `all_chains = false` + grants | Listed `chain_id`s only |
+
+| `all_chains = false`, no grants | **403** — no brands (except admin-only routes when zero brands exist) |
+
+
+
+Identity key is JWT **`sub`**, scoped by **`enterprise_id`** on the token.
+
+
+
+### Platform operators (Phase **9E**)
+
+
+
+Internal ops users: separate table or `staff_member` with a **`platform_operator`** flag / role. Action adds **`platform_operator`** to JWT **`roles`**. Gateway permission **`platform:admin`** on `/v1/inventory/platform/*`.
+
+
 
 ### M2M integrations
 
-Same pattern on separate tables:
 
-- **`inventory.integration_client`** — keyed by Auth0 **`client_id`** / token **`azp`**
-- **`inventory.integration_chain_grant`**
 
-Register integrations in the DB; the Credentials Exchange Action only needs **`enterprise_id`** (and optional **`integration`** role).
+Unchanged: **`integration_client`** + **`integration_chain_grant`**. Credentials Exchange Action sets **`enterprise_id`** (+ optional **`integration`** role).
+
+
 
 ---
+
+
+
+## Invite and accept flow
+
+
+
+```mermaid
+
+sequenceDiagram
+
+  participant Admin as Portal admin
+
+  participant API as Inventory API
+
+  participant Invitee
+
+  participant SPA
+
+  participant Auth0
+
+
+
+  Admin->>API: POST /admin/staff/invite
+
+  API-->>Admin: accept URL (dev) or email sent (9C)
+
+  Invitee->>SPA: Open /invite/accept?token=
+
+  SPA->>Auth0: Login (signup if new user)
+
+  SPA->>API: POST /invites/accept { token } + Bearer
+
+  API->>API: Link auth0_sub, status=active
+
+  Note over Invitee,Auth0: Next login: Action sets enterprise_id + role from DB
+
+```
+
+
+
+**Single accept path:** SPA **`POST /invites/accept`** after login. Action does **not** link `auth0_sub` — it only reads claims for tokens.
+
+
+
+**Token security:** random token, SHA-256 hash in DB, TTL (e.g. 7 days), single-use, constant-time verify, invite email must match JWT email.
+
+
+
+**Email collision:** Same email in two enterprises is allowed. Accept verifies token → staff row → enterprise; Action lookup uses email and returns the **active/pending** staff row (if multiple, prefer accepted invite context — document: one pending invite per email per enterprise).
+
+
+
+---
+
+
 
 ## HTTP surfaces
 
+
+
+### Shipped
+
+
+
 | Route | Audience | Purpose |
+
 |-------|----------|---------|
-| `GET /v1/inventory/staff/access` | Gateway → inventory (internal binding) | Resolve grants by `enterprise_id` + `auth0_sub` or `client_id` |
-| `GET /v1/inventory/me/chains` | Authenticated SPA / API clients | Brands the caller may access (after gateway scope resolution) |
-| `GET /v1/inventory/enterprises/by-id/:id/chains` | Gateway (internal) | Full brand list for an enterprise |
-| `GET /v1/inventory/admin/staff` | **Manager** (Auth0 role) | List provisioned staff for token enterprise |
-| `POST /v1/inventory/admin/staff` | **Manager** | Create `staff_member` + optional grants |
-| `PATCH /v1/inventory/admin/staff/{id}` | **Manager** | Update email, `auth0_sub`, `active`, `all_chains`, … |
-| `PUT /v1/inventory/admin/staff/{id}/chains` | **Manager** | Replace `staff_chain_grant` rows |
 
-Legacy tokens without **`enterprise_id`** may still use **`chain_id`** / **`chain_ids`** claims on the JWT; gateway accepts those for backward compatibility.
+| `GET /v1/inventory/staff/access` | Gateway (internal) | Grants by `enterprise_id` + `auth0_sub` / `client_id` |
 
-### Admin staff API (manager only)
+| `GET /v1/inventory/me/chains` | Authenticated clients | Caller’s allowed brands |
 
-Gateway requires permission **`staff:admin`** (granted only to **`manager`** today). Inventory double-checks **`x-roles`** contains `manager`.
+| `GET/POST/PATCH/PUT …/admin/staff` | **Manager** JWT | Staff CRUD (break-glass create with `auth0_sub`) |
 
-**List staff**
 
-```http
-GET /v1/inventory/admin/staff
-Authorization: Bearer …
-```
 
-**Create staff** — require `email`, `auth0_sub`, and either `all_chains: true` or non-empty `chain_ids`:
+### Phase 9B+
 
-```json
-{
-  "email": "frontdesk@hbr.demo",
-  "auth0_sub": "auth0|…",
-  "display_name": "Harborline Front Desk",
-  "all_chains": false,
-  "chain_ids": ["a1111111-1111-4111-8111-111111111111"]
-}
-```
 
-**Patch staff** — partial update (`active`, `all_chains`, `email`, `auth0_sub`, …).
 
-**Replace brand grants**
+| Route | Audience | Purpose |
 
-```http
-PUT /v1/inventory/admin/staff/{id}/chains
-{ "chain_ids": ["…"] }
-```
+|-------|----------|---------|
 
-Staff access changes take effect within the gateway cache TTL (~60s); no re-login required.
+| `POST /v1/inventory/admin/staff/invite` | **Manager** | Pending staff + invite |
+
+| `POST /v1/inventory/invites/accept` | Bearer (invitee) | Link `auth0_sub`, activate |
+
+| `GET /v1/inventory/internal/staff/claims` | Action (secret) | `{ email }` → `{ enterprise_id, roles }` |
+
+| `POST /v1/inventory/platform/enterprises` | **platform_operator** | Create enterprise (no brands) |
+
+| `POST/PATCH /v1/inventory/admin/chains` | **Manager** | Brand CRUD (**9F**) |
+
+
+
+Gateway permissions: **`staff:admin`**, **`platform:admin`**. Inventory checks **`x-roles`** from gateway.
+
+
+
+Legacy tokens without **`enterprise_id`** may still use **`chain_id`** / **`chain_ids`** claims.
+
+
 
 ---
 
-## Auth0 (minimal Action)
 
-The Post Login Action sets only:
 
-- **`https://hospitality.app/claims/enterprise_id`**
-- **`https://hospitality.app/claims/roles`**
-- **`https://hospitality.app/claims/email`** (required for guest reservation scoping)
+## Auth0 Post Login Action (target)
 
-Do **not** put brand UUIDs or `allowed_chain_codes` in Auth0 metadata — that bypasses the admin portal data model and requires re-login to change access.
+
+
+1. Always set **`email`** claim from Auth0 user profile.
+
+2. Call inventory **`GET /internal/staff/claims?email=`** with header **`x-action-secret`**.
+
+3. If response includes staff claims → set **`enterprise_id`** and **`roles: [intended_role]`**.
+
+4. If platform operator → add **`platform_operator`** to roles (or separate branch).
+
+5. Else → **`roles: ["guest"]`**; omit **`enterprise_id`** (public guest booking).
+
+
+
+Do **not** read `event.authorization.roles` (Auth0 RBAC) for app permissions.
+
+
+
+Do **not** put brand UUIDs in Auth0 metadata.
+
+
+
+Snippet and secrets: [`README.md`](../README.md) §2 (updated in **9B**).
+
+
 
 ---
 
-## Future work (not implemented)
 
-| Item | Target | Notes |
-|------|--------|--------|
-| **Admin SPA** | Phase 9 UI | Manager UI for staff CRUD; calls admin API above |
-| **Roles in DB** | Thin-token migration | `staff_member.role`; Auth0 Action drops `roles` claim |
-| **Grant audit** | Migration + admin API | `granted_by`, `granted_at` on `staff_chain_grant` |
-| **Invite flow** | Admin SPA | Email invite → user logs in → `auth0_sub` linked automatically |
-| **Cache purge** | Gateway | Immediate effect after admin writes (optional `Cache-Control` hook) |
-| **Separate authz service** | Scale / compliance | See [Separate authorization service?](#separate-authorization-service) |
-| **Hotel-level ACLs** | Advanced RBAC | Property-scoped permissions beyond brand |
+
+## Tenant onboarding (target)
+
+
+
+See [`PHASE9_PLAN.md`](PHASE9_PLAN.md).
+
+
+
+```text
+
+Platform Portal                    Enterprise Admin Portal
+
+─────────────────                  ───────────────────────
+
+Create enterprise (no brands)
+
+Invite first all-chain manager ──► Accept invite → sign in
+
+                                   Create brands
+
+                                   Invite staff (email, role, brands)
+
+```
+
+
+
+**No SQL. No Auth0 Dashboard per user.**
+
+
+
+### Interim bootstrap (until 9B)
+
+
+
+1. Auth0: assign **`manager`** role to user (RBAC).
+
+2. SQL: update **`staff_member.auth0_sub`** after first login.
+
+3. Action: hardcoded demo **`enterprise_id`**.
+
+
+
+Remove from ops runbooks once **9B** ships.
+
+
 
 ---
+
+
+
+## Future work (after Phase 9)
+
+
+
+| Item | Notes |
+
+|------|--------|
+
+| **Auth0 Organizations** | Enterprise SSO; map IdP groups → `intended_role` in Action |
+
+| **Cache purge** | Immediate effect after admin writes |
+
+| **Grant audit** | `granted_by` on `staff_chain_grant` (`granted_at` exists) |
+
+| **Thin JWT** | Gateway reads role from staff lookup; Action emits only `sub` + `email` |
+
+| **Separate authz service** | See below |
+
+| **Hotel-level ACLs** | Property-scoped permissions |
+
+
+
+---
+
+
 
 ## Separate authorization service?
 
-**Recommendation today: no.** Keep authorization **logic in the gateway** and **grant data in inventory** (same Supabase project, `inventory` schema).
 
-### Why this is enough for now
 
-1. **Single front door** — All external traffic already goes through the gateway ([**FR-A1**](REQUIREMENTS.md)); workers trust gateway-injected headers, not raw JWTs.
-2. **Tight coupling to catalog** — Brand scope is “which `inventory.chain` rows”; inventory already owns enterprise + chain data. A separate service would still call the same tables or duplicate chain metadata.
-3. **Small policy surface** — Coarse roles (5 values) + brand allow-list is simple compared to ABAC, delegation, or property-level ACLs.
-4. **Operational cost** — Another Worker (deploy, cache, monitoring, failure mode) for little gain at current scale (3 backend services).
+**Recommendation today: no.** Keep authorization **logic in the gateway** and **grant data in inventory**.
 
-### When a dedicated **authz** service *would* make sense
 
-Consider extracting **`services/authz`** (or adopting SpiceDB / OPA) when **several** of these become true:
 
-- **Roles and permissions** live fully in DB with frequent policy changes and audit requirements.
-- **Multiple policy dimensions** — hotel-level, rate-plan admin, time-bound access, delegation (“act as front desk for HBR this week”).
-- **Non-gateway clients** need the same evaluation (avoid — keep gateway as PEP).
-- **Policy-as-code** owned by a separate team or compliance requires a standard engine (Cedar, Rego).
-- **Inventory service** grows too large; you want a clear bounded context for “access control” CRUD and evaluation APIs.
+See prior rationale: single front door, tight catalog coupling, small policy surface, low operational cost at current scale.
 
-### Middle ground (before a full authz service)
 
-If grant CRUD grows but evaluation stays simple:
 
-1. Add **`/v1/admin/*`** routes on **inventory** (or a thin **admin** worker).
-2. Keep **`GET /staff/access`** as the single evaluation read for the gateway.
-3. Optionally move **`authorization.ts`** route matrix into a shared npm package consumed by gateway only.
+Extract **`services/authz`** when multiple dimensions (hotel ACLs, delegation, compliance engine) justify a fourth runtime.
 
-That preserves one evaluation path without a fourth runtime on every request.
 
-### Target architecture if you extract later
-
-```text
-Client → Gateway (JWT verify, PEP)
-              → Authz service: ResolveAccess(enterprise_id, sub, roles) → { chain_ids, permissions }
-              → Inventory / Reservations (trust headers)
-```
-
-Grant tables could move to an **`auth`** schema or authz service DB; gateway cache TTL and API shape stay the same.
 
 ---
+
+
 
 ## Related requirements
 
+
+
 | ID | Topic | Status |
+
 |----|-------|--------|
-| **FR-Z1** | Route policies from roles claim | Shipped (gateway) |
-| **FR-Z2** | M2M restrictions | Shipped (gateway + `integration_client`) |
-| **FR-A3** | Tenant identity | **Updated** — enterprise + brand scope (see §1.1 note in REQUIREMENTS) |
-| **FR-Z3** *(proposed)* | DB-backed staff brand grants | Shipped (**0018**) |
-| **FR-Z4** | Admin staff / grant CRUD | **API shipped** (`/v1/inventory/admin/staff`); admin SPA backlog |
+
+| **FR-Z1** | Route policies from roles claim | Shipped (gateway); **9B** — roles from DB via Action |
+
+| **FR-Z2** | M2M restrictions | Shipped |
+
+| **FR-A3** | Tenant identity | Enterprise + brand scope |
+
+| **FR-Z3** | DB-backed brand grants | Shipped (**0018**) |
+
+| **FR-Z4** | Staff invite + Enterprise Admin | **9B–9D** |
+
+| **FR-Z5** | Platform Portal bootstrap | **9E** |
+
+| **FR-Z6** | Manager brand CRUD | **9F** |
+
+
 
 ---
 
+
+
 ## Revision history
 
+
+
 | Date | Change |
+
 |------|--------|
-| 2026-06-27 | Enterprise model (**0017**), gateway multi-chain forwarding, SPA brand filter. |
-| 2026-06-27 | Staff brand access in DB (**0018**); removed Auth0 `allowed_chain_codes`; `GET /me/chains`. |
-| 2026-06-27 | Manager **admin staff API**; `staff:admin` permission; Auth0 vs DB split documented. |
+
+| 2026-06-27 | Enterprise model (**0017**), gateway multi-chain, SPA brand filter. |
+
+| 2026-06-27 | Staff brand access (**0018**); admin staff API; Auth0 vs DB split. |
+
+| 2026-06-28 | **DB-driven roles** decision; invite + accept spec; zero-brand gateway; Phase **9B** claims API; deprecate per-user Auth0 RBAC. |
+
+

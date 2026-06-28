@@ -123,20 +123,19 @@ Split so backend can ship while UI starts:
 
 ---
 
-## Phase 9 — Admin access control (in progress)
+## Phase 9 — Portals, invites, and enterprise admin (in progress)
 
-Design: [`docs/AUTHORIZATION.md`](AUTHORIZATION.md).
+Design: [`docs/AUTHORIZATION.md`](AUTHORIZATION.md). **Sub-phases 9A–9G:** [`docs/PHASE9_PLAN.md`](PHASE9_PLAN.md).
 
-| Work | FRs | Status |
-|------|-----|--------|
-| **Staff CRUD API** — list/create/update/disable `staff_member`; replace `staff_chain_grant` sets. | FR-Z4 | **Shipped** — `/v1/inventory/admin/staff` (manager + `staff:admin`) |
-| **Admin SPA** — invite by email, brand checkboxes, corporate “all brands” toggle. | FR-Z4 | Backlog |
-| **Optional:** move **roles** from Auth0 into DB; Auth0 Action only sets `sub` + `enterprise_id`. | FR-Z1 (evolve) | Future — see AUTHORIZATION.md |
-| **Optional:** audit columns on grants (`granted_by`, `granted_at`). | FR-Z4 | Future migration |
+**Shipped:** staff CRUD API (**0018**), enterprise scope (**0017**), gateway + SPA staff tools.
 
-**Exit (when complete):** Managers provision staff and brand access without SQL or Auth0 dashboard.
+**Goal:** **Platform Portal** + **Enterprise Admin Portal** with **email invite** and **DB-driven roles** (Auth0 = identity only). **~3 weeks** — see [`PHASE9_PLAN.md`](PHASE9_PLAN.md).
 
-**Not planned yet:** separate **`services/authz`** worker — see AUTHORIZATION.md.
+**Authorization (locked):** `staff_member.intended_role` + Post Login Action → JWT `roles`; no per-user Auth0 RBAC assignment.
+
+**Next:** **9A** — commit `accessWarning` SPA fix + `deploy-web`. **Then 9B** — migration **0019**, invite/accept, claims API, Action update, gateway zero-brand bypass.
+
+---
 
 ## Backlog coverage (every §2 FR → phase)
 
@@ -157,10 +156,12 @@ Design: [`docs/AUTHORIZATION.md`](AUTHORIZATION.md).
 | FR-R9 | 6 | Cancellation metadata (+ refunds when payments exist) |
 | FR-R10 | 6 | Reservation notes |
 | FR-R11 | 5 | PATCH concurrency (ETags) |
-| FR-Z1 | 6 | Roles / scopes |
+| FR-Z1 | 6 + **9B** | Roles / scopes; **9B** — DB-driven roles on JWT (Action) |
 | FR-Z2 | 6 | M2M vs user policies |
-| FR-Z3 | 9 (shipped) | Enterprise multi-brand (**0017**) |
-| FR-Z4 | 9 (API shipped) | Admin staff REST + grant replace |
+| FR-Z3 | shipped | Enterprise multi-brand (**0017**) |
+| FR-Z4 | 9B–9D (API partial) | Staff invite + Enterprise Admin Portal; CRUD API **shipped** |
+| FR-Z5 | 9E (planned) | Platform Portal enterprise bootstrap |
+| FR-Z6 | 9F (planned) | Manager-created brands (admin chain CRUD) |
 | FR-O1 | 1 | Correlation IDs |
 | FR-O2 | 7 (7D) | Metrics + structured logs (**7D shipped**) |
 | FR-O3 | 1 + 7 (7E) | Readiness — JWKS + optional Supabase ping (**7E shipped**) |
@@ -204,3 +205,5 @@ Design: [`docs/AUTHORIZATION.md`](AUTHORIZATION.md).
 | 2026-06-28 | Phase **8C**: **staff calendar UI** — month grid from **`GET …/calendar`**. |
 | 2026-06-28 | Phase **8D**: **staff reservations UI** — list filters, detail, confirm/cancel, notes (**`If-Match`**). Phase **8 complete**. |
 | 2026-06-27 | **Enterprise + auth:** migrations **0017** / **0018**; multi-brand gateway scope; DB staff grants; admin staff API; [`docs/AUTHORIZATION.md`](AUTHORIZATION.md). |
+| 2026-06-28 | Phase **9** replanned: **9A–9G** fast track (Platform Portal, Enterprise Admin Portal, email invite, brand CRUD); Phase **10** thin token deferred. |
+| 2026-06-28 | **Auth model locked:** DB-driven **`intended_role`** + Action claims (**9B**); Auth0 identity-only; [`PHASE9_PLAN.md`](PHASE9_PLAN.md) + [`AUTHORIZATION.md`](AUTHORIZATION.md) updated. |
