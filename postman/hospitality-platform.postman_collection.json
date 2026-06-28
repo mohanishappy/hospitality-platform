@@ -518,8 +518,8 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{baseUrl}}/v1/reservations?limit=20&offset=0&chain_id={{chain_id}}",
-            "description": "Newest first across allowed brands (enterprise staff) or email-scoped (guest). Optional filters (**FR-R8**): **`status`**, **`hotel_id`**, **`chain_id`** (brand UUID — leave **`chain_id`** var empty for all brands), **`stay_from`** + **`stay_to`**. Response includes `has_more`. No embedded `guest` rows."
+            "url": "{{baseUrl}}/v1/reservations?limit=20&offset=0",
+            "description": "Newest first across allowed brands (enterprise staff) or email-scoped (guest). Optional filters (**FR-R8**): **`status`**, **`hotel_id`**, **`chain_id`** (brand UUID — add `&chain_id={{chain_id}}` when **`chain_id`** is set), **`stay_from`** + **`stay_to`**. Response includes `has_more`. No embedded `guest` rows."
           },
           "response": []
         },

@@ -1,6 +1,6 @@
+import { isUuidLike } from "../../../lib/uuid.ts";
+
 const isoDateRe = /^\d{4}-\d{2}-\d{2}$/;
-const uuidLike =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function optionalCode(
   raw: string | undefined
@@ -94,7 +94,7 @@ export function parseSearchQuery(c: {
   if (hotelsRaw) {
     const parts = hotelsRaw.split(",").map((s) => s.trim()).filter(Boolean);
     for (const id of parts) {
-      if (!uuidLike.test(id)) {
+      if (!isUuidLike(id)) {
         return {
           ok: false,
           detail: "hotel_ids must be comma-separated UUIDs",

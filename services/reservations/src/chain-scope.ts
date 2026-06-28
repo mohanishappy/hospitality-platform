@@ -1,9 +1,7 @@
 import type { Context } from "hono";
 import type { Env } from "./types";
+import { isUuidLike } from "../../../lib/uuid.ts";
 import { problem } from "./problem";
-
-const uuidLike =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /** Allowed chain UUIDs from gateway (`x-chain-ids` or legacy `x-chain-id`). */
 export function parseAllowedChainIds(c: Context<{ Bindings: Env }>): string[] | null {
@@ -12,11 +10,11 @@ export function parseAllowedChainIds(c: Context<{ Bindings: Env }>): string[] | 
     const ids = multiRaw
       .split(",")
       .map((s) => s.trim())
-      .filter((s) => uuidLike.test(s));
+      .filter((s) => isUuidLike(s));
     if (ids.length > 0) return ids;
   }
   const single = c.req.header("x-chain-id")?.trim();
-  if (single && uuidLike.test(single)) return [single];
+  if (single && isUuidLike(single)) return [single];
   return null;
 }
 

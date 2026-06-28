@@ -1,12 +1,10 @@
 import type { Context } from "hono";
+import { isUuidLike } from "../../../lib/uuid.ts";
 import type { Env } from "../types";
 import { formatPostgrestError } from "../postgrest";
 import { problem } from "../problem";
 import { HOTEL_LIST_SELECT, HOTEL_LIST_WITH_CHAIN_SELECT } from "../selects";
 import { supaClient } from "../supabase";
-
-const uuidLike =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function parseChainIdsHeader(c: Context<{ Bindings: Env }>): string[] | null {
   const multiRaw = c.req.header("x-chain-ids")?.trim();
@@ -14,11 +12,11 @@ function parseChainIdsHeader(c: Context<{ Bindings: Env }>): string[] | null {
     const ids = multiRaw
       .split(",")
       .map((s) => s.trim())
-      .filter((s) => uuidLike.test(s));
+      .filter((s) => isUuidLike(s));
     if (ids.length > 0) return ids;
   }
   const single = c.req.header("x-chain-id")?.trim();
-  if (single && uuidLike.test(single)) return [single];
+  if (single && isUuidLike(single)) return [single];
   return null;
 }
 

@@ -3,7 +3,10 @@ import {
   getChainIds,
   getEnterpriseId,
 } from "../services/gateway/src/claims.ts";
-import { reservationInScope } from "../services/reservations/src/chain-scope.ts";
+import {
+  parseAllowedChainIds,
+  reservationInScope,
+} from "../services/reservations/src/chain-scope.ts";
 import { parseReservationListFilters } from "../services/reservations/src/validation.ts";
 
 const DEMO = "00000000-0000-0000-0000-000000000001";
@@ -41,6 +44,18 @@ describe("reservationInScope", () => {
   });
 });
 
+describe("parseAllowedChainIds", () => {
+  it("keeps legacy seed ids from x-chain-ids", () => {
+    const ids = parseAllowedChainIds({
+      req: {
+        header: (name: string) =>
+          name === "x-chain-ids" ? `${DEMO},${HBR}` : undefined,
+      },
+    } as never);
+    expect(ids).toEqual([DEMO, HBR]);
+  });
+});
+
 describe("parseReservationListFilters chain_id", () => {
   it("accepts optional chain_id UUID", () => {
     const result = parseReservationListFilters({
@@ -48,6 +63,14 @@ describe("parseReservationListFilters chain_id", () => {
     });
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.chain_id).toBe(HBR);
+  });
+
+  it("accepts legacy seed chain ids (DEMO)", () => {
+    const result = parseReservationListFilters({
+      req: { query: (k) => (k === "chain_id" ? DEMO : undefined) },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.chain_id).toBe(DEMO);
   });
 
   it("rejects invalid chain_id", () => {

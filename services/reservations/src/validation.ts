@@ -329,8 +329,7 @@ export function parseListQuery(c: {
   return { limit, offset };
 }
 
-const uuidLike =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+import { isUuidLike } from "../../../lib/uuid.ts";
 
 /** Query params for `GET /v1/reservations` list filters (FR-R8). */
 export function parseReservationListFilters(c: {
@@ -369,7 +368,7 @@ export function parseReservationListFilters(c: {
 
   let hotel_id: string | undefined;
   if (hotelIdRaw) {
-    if (!uuidLike.test(hotelIdRaw)) {
+    if (!isUuidLike(hotelIdRaw)) {
       return { ok: false, detail: "hotel_id must be a UUID when provided" };
     }
     hotel_id = hotelIdRaw;
@@ -377,7 +376,7 @@ export function parseReservationListFilters(c: {
 
   let chain_id: string | undefined;
   if (chainIdRaw) {
-    if (!uuidLike.test(chainIdRaw)) {
+    if (!isUuidLike(chainIdRaw)) {
       return { ok: false, detail: "chain_id must be a UUID when provided" };
     }
     chain_id = chainIdRaw;

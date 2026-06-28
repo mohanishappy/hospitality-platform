@@ -1,9 +1,9 @@
 import type { Context } from "hono";
+import { isUuidLike, UUID_LIKE } from "../../../lib/uuid.ts";
 import { problem } from "./problem";
 import type { Env } from "./types";
 
-const uuidLike =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export { UUID_LIKE as uuidLike };
 
 export function parseRolesHeader(c: Context<{ Bindings: Env }>): string[] {
   const raw = c.req.header("x-roles")?.trim();
@@ -31,7 +31,7 @@ export function requireManager(c: Context<{ Bindings: Env }>) {
 
 export function requireEnterpriseId(c: Context<{ Bindings: Env }>) {
   const enterpriseId = c.req.header("x-enterprise-id")?.trim() ?? "";
-  if (!enterpriseId || !uuidLike.test(enterpriseId)) {
+  if (!enterpriseId || !isUuidLike(enterpriseId)) {
     return {
       ok: false as const,
       response: problem(
@@ -44,4 +44,3 @@ export function requireEnterpriseId(c: Context<{ Bindings: Env }>) {
   return { ok: true as const, enterpriseId };
 }
 
-export { uuidLike };

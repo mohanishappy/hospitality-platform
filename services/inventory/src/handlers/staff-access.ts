@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { isUuidLike } from "../../../lib/uuid.ts";
 import type { Env } from "../types";
 import { formatPostgrestError } from "../postgrest";
 import { problem } from "../problem";
@@ -12,9 +13,6 @@ export type StaffAccessResponse = {
     chain_ids?: string[];
   };
 };
-
-const uuidLike =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 async function grantsForStaffMember(
   supa: ReturnType<typeof supaClient>,
@@ -56,7 +54,7 @@ export async function getStaffAccess(c: Context<{ Bindings: Env }>) {
   const auth0Sub = c.req.query("auth0_sub")?.trim() ?? "";
   const clientId = c.req.query("client_id")?.trim() ?? "";
 
-  if (!enterpriseId || !uuidLike.test(enterpriseId)) {
+  if (!enterpriseId || !isUuidLike(enterpriseId)) {
     return problem(400, "Bad Request", "enterprise_id query param required");
   }
   if (!auth0Sub && !clientId) {
@@ -140,10 +138,10 @@ export async function getMyChains(c: Context<{ Bindings: Env }>) {
     ? raw
         .split(",")
         .map((s) => s.trim())
-        .filter((s) => uuidLike.test(s))
+        .filter((s) => isUuidLike(s))
     : [];
   const single = c.req.header("x-chain-id")?.trim();
-  if (single && uuidLike.test(single) && !ids.includes(single)) {
+  if (single && isUuidLike(single) && !ids.includes(single)) {
     ids.push(single);
   }
   if (ids.length === 0) {
