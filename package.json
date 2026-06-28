@@ -10,6 +10,7 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
+    "smoke:deploy": "node scripts/smoke-deploy-public.mjs",
     "typecheck": "npm run typecheck:inventory && npm run typecheck:reservations && npm run typecheck:gateway",
     "typecheck:inventory": "cd services/inventory && npx tsc --noEmit",
     "typecheck:reservations": "cd services/reservations && npx tsc --noEmit",

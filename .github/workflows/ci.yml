@@ -1,5 +1,5 @@
-# Quality checks on every push and PR; on main: tests → Supabase migrations → deploy Workers.
-# Secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, plus SUPABASE_* for migrate (see README).
+# Quality checks on every push and PR; on main: tests → Supabase migrations → deploy Workers → post-deploy smoke.
+# Secrets: CLOUDFLARE_*, SUPABASE_*, GATEWAY_BASE_URL (smoke on main after deploy).
 
 name: CI
 
@@ -108,3 +108,23 @@ jobs:
 
       - name: Deploy gateway
         run: npm run deploy:gateway
+
+  smoke:
+    needs: deploy
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Post-deploy public smoke (7A)
+        env:
+          GATEWAY_BASE_URL: ${{ secrets.GATEWAY_BASE_URL }}
+        run: node scripts/smoke-deploy-public.mjs

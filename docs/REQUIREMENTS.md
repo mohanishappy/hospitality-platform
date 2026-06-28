@@ -1,9 +1,9 @@
 # Functional requirements — Hospitality Platform API
 
-This document captures **functional requirements** (FRs) for the gateway-backed API: inventory (hotels, room types, availability/quote, search, calendar) and reservations. **§1** reflects the **as-built** behavior as of Supabase migration **`0014`** and the gateway OpenAPI contract. **§2** is a **prioritized backlog** (several items are now shipped — see [`FR_STATUS.md`](FR_STATUS.md)).
+This document captures **functional requirements** (FRs) for the gateway-backed API: inventory (hotels, room types, availability/quote, search, calendar) and reservations. **§1** reflects the **as-built** behavior as of Supabase migration **`0016`** and the gateway OpenAPI contract. **§2** is a **prioritized backlog** (several items are now shipped — see [`FR_STATUS.md`](FR_STATUS.md)).
 
 **Contract source:** `services/gateway/src/openapi.json`  
-**Migrations:** `supabase/migrations/` (through `0014_phase3_phase4_rate_plans_search_policies.sql`)  
+**Migrations:** `supabase/migrations/` (through `0016_cancellation_notes.sql`)  
 **Backlog implementation order:** see [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).
 
 ---
@@ -18,7 +18,8 @@ This document captures **functional requirements** (FRs) for the gateway-backed 
 | **FR-A2** | Protected routes require a **Bearer** access token whose `aud` matches the configured Auth0 API (`AUTH0_AUDIENCE`). |
 | **FR-A3** | The token carries tenant identity in claim **`https://hospitality.app/claims/chain_id`** (UUID string). The gateway resolves `chain_id` and injects **`x-chain-id`** for workers. |
 | **FR-A4** | Path and body identifiers (`hotel_id`, etc.) must belong to the token’s chain; wrong chain yields **404** (or equivalent) as implemented. |
-| **FR-A5** | **`GET /health`**, **`GET /openapi.json`**, and **`GET /docs`** are available without authentication. |
+| **FR-A5** | **`GET /health`**, **`GET /health/ready`**, **`GET /openapi.json`**, and **`GET /docs`** are available without authentication. |
+| **FR-A6** | When the access token includes claim **`https://hospitality.app/claims/roles`**, the gateway enforces route policies (**`read_only`**, **`front_desk`**, **`manager`**, **`integration`**). Tokens **without** a roles claim retain full access (soft rollout). |
 
 ### 1.2 Inventory — catalog
 
@@ -42,7 +43,13 @@ This document captures **functional requirements** (FRs) for the gateway-backed 
 | ID | Requirement |
 |----|-------------|
 | **FR-V1** | **Search** across room types / hotels: `GET /v1/inventory/search?check_in=&check_out=` with optional comma-separated **`hotel_ids`**, **`sort`** (`price` \| `bookable`), **`limit`** (1–100), and optional **`rate_plan_code`** / **`promotion_code`**. Rows omit hotels that fail **booking policy** validation for the stay. |
-| **FR-V2** | **Calendar** view: `GET /v1/inventory/hotels/{hotelId}/room-types/{roomTypeId}/calendar?from=&to=` with half-open **`[from, to)`** — per-day **occupancy**, **blocks**, **remaining_units**, **bookable**. |
+| **FR-V2** | **Calendar** view: `GET /v1/inventory/hotels/{hotelId}/room-types/{roomTypeId}/calendar?from=&to=` with half-open **`[from, to)`** — per-day **occupancy**, **blocks**, **soft_hold_units**, **remaining_units**, **bookable**. |
+
+### 1.3c Inventory — soft holds (phase 5)
+
+| ID | Requirement |
+|----|-------------|
+| **FR-V5** | **Soft hold** with TTL: `POST …/room-types/{roomTypeId}/soft-holds`, `DELETE /v1/inventory/soft-holds/{holdId}`; active holds reduce quoted/calendar availability until released or expired. |
 
 ### 1.4 Reservations — lifecycle and idempotency
 
@@ -51,10 +58,13 @@ This document captures **functional requirements** (FRs) for the gateway-backed 
 | **FR-R1** | **Create reservation** requires header **`Idempotency-Key`**. First successful create returns **201** with **`idempotent_replay: false`**; replay with the same key and equivalent body returns **200** with **`idempotent_replay: true`**. |
 | **FR-R2** | Create body includes **`hotel_id`**, **`room_type_id`**, **`check_in`**, **`check_out`** (date-only), nested **`guest`**, and optional **`rate_plan_code`** / **`promotion_code`** (must match server pricing when set), as validated by the service. |
 | **FR-R3** | Create enforces the same **per-night** capacity rules as the availability quote path (aligned with migration **0012** RPCs). |
-| **FR-R4** | **List reservations** for the chain supports **`limit`** (default 20, max 100) and **`offset`** (default 0). List items omit embedded **guest**; use **GET by id** for guest PII. |
-| **FR-R5** | **Get reservation by id** returns the reservation and nested **guest** for that chain. |
-| **FR-R6** | **Patch reservation status** via `PATCH /v1/reservations/{id}` with JSON **`status`**: allowed transitions **`pending` → `confirmed` \| `cancelled`**, **`confirmed` → `cancelled`**, idempotent same-status no-op; invalid transition **409**. |
-| **FR-R7** | **Patch guest** via `PATCH /v1/reservations/{id}/guest` with partial JSON; **`phone`** may be **`null`** to clear. |
+| **FR-R4** | **List reservations** for the chain supports **`limit`** (default 20, max 100), **`offset`** (default 0), and optional filters **`status`**, **`hotel_id`**, **`stay_from`** + **`stay_to`** (overlap window). List items omit embedded **guest**; use **GET by id** for guest PII. |
+| **FR-R5** | **Get reservation by id** returns the reservation and nested **guest** for that chain. Response includes weak **`ETag`** derived from **`row_version`**. |
+| **FR-R6** | **Patch reservation status** via `PATCH /v1/reservations/{id}` with JSON **`status`**: allowed transitions **`pending` → `confirmed` \| `cancelled`**, **`confirmed` → `cancelled`**, idempotent same-status no-op; invalid transition **409**. Optional **`cancellation_reason`** when cancelling; server sets **`cancelled_at`**. Optional **`If-Match`** → **412** on **`row_version`** mismatch. |
+| **FR-R7** | **Patch guest** via `PATCH /v1/reservations/{id}/guest` with partial JSON; **`phone`** may be **`null`** to clear. Optional **`If-Match`**. |
+| **FR-R9** | **Cancellation metadata** on **`reservation_stub`**: **`cancellation_reason`** enum, **`cancelled_at`** set on transition to **cancelled**. |
+| **FR-R10** | **Reservation notes** via `PATCH /v1/reservations/{id}/notes`: **`internal_note`**, **`guest_note`** (nullable strings). |
+| **FR-R11** | **Optimistic concurrency**: **`row_version`** on **`reservation_stub`**; **GET**/**POST** create echo **`ETag`**; **PATCH** accepts optional **`If-Match`**. |
 
 ### 1.5 API contract and errors
 
@@ -68,7 +78,7 @@ This document captures **functional requirements** (FRs) for the gateway-backed 
 | ID | Requirement |
 |----|-------------|
 | **FR-S1** | Postman artifacts under `postman/` support gateway testing, including **GET Room type availability & quote** and reservation flows; environment vs collection variables follow `postman/README.md`. |
-| **FR-S2** | Supabase migrations through **0014** define schemas, RPCs, and grants; Workers use the **service role** and `supabase-js` with exposed schemas **`inventory`** and **`reservations`** (and **`public`** as needed). |
+| **FR-S2** | Supabase migrations through **0016** define schemas, RPCs, and grants; Workers use the **service role** and `supabase-js` with exposed schemas **`inventory`** and **`reservations`** (and **`public`** as needed). |
 
 ---
 
@@ -84,8 +94,8 @@ Prioritize into releases (e.g. commercial → search → operations).
 | **FR-C2** | **Length-of-stay (LOS)** pricing (e.g. tiered nightly rates by stay length). *Shipped: `rate_plan_los_tier`.* |
 | **FR-C3** | **Promotions / coupons** (optional): percentage or fixed discounts with constraints (minimum LOS, blackout dates). *Shipped: `promotion` table + optional code on quote/create/search.* |
 | **FR-C4** | **Itemized fees** beyond a single **`fee_fixed_cents`** (e.g. resort, parking). *Partial: JSON line items + fixed fee; full fee catalog TBD.* |
-| **FR-C5** | **Persist quoted amounts** on the reservation (or reference a quote snapshot) so confirmation matches what was displayed. |
-| **FR-C6** | **Currency** policy: consistent currency per hotel or chain and explicit **rounding** rules in API responses. |
+| **FR-C5** | **Persist quoted amounts** on the reservation (or reference a quote snapshot) so confirmation matches what was displayed. *Shipped: **`pricing_snapshot`** + optional **`expected_total_cents`**.* |
+| **FR-C6** | **Currency** policy: consistent currency per hotel or chain and explicit **rounding** rules in API responses. *Shipped: **`inventory.chain.default_currency`**.* |
 
 ### 2.2 Availability and search
 
@@ -95,23 +105,23 @@ Prioritize into releases (e.g. commercial → search → operations).
 | **FR-V2** | **Calendar-oriented** API: per-day availability or remaining units for planning UIs. *Shipped: **§1.3b**.* |
 | **FR-V3** | **Inventory blocks** (maintenance, holds) that reduce sellable capacity without guest reservations. *Shipped: `inventory_block`.* |
 | **FR-V4** | **Booking policies**: minimum/maximum LOS, closed-to-arrival/departure, same-day cutoff, **hotel timezone** awareness. *Shipped: hotel columns + validation in quote/create.* |
-| **FR-V5** | **Soft hold** (optional): temporary inventory lock with TTL before payment or confirmation. |
+| **FR-V5** | **Soft hold** (optional): temporary inventory lock with TTL before payment or confirmation. *Shipped: **§1.3c**.* |
 
 ### 2.3 Reservations and guests
 
 | ID | Requirement |
 |----|-------------|
-| **FR-R8** | **List filters**: by status, hotel, stay dates, guest identifiers (subject to privacy rules). |
-| **FR-R9** | **Cancellation** metadata (reason codes) and, if payments exist, **refund** state. |
-| **FR-R10** | **Reservation notes** (internal vs guest-visible). |
-| **FR-R11** | **Concurrency** semantics for **PATCH** (e.g. ETags or conflict responses) where concurrent edits matter. |
+| **FR-R8** | **List filters**: by status, hotel, stay dates, guest identifiers (subject to privacy rules). *Shipped: status/hotel/stay window on **GET /v1/reservations**.* |
+| **FR-R9** | **Cancellation** metadata (reason codes) and, if payments exist, **refund** state. *Shipped: reason + **`cancelled_at`**; refunds deferred.* |
+| **FR-R10** | **Reservation notes** (internal vs guest-visible). *Shipped: **§1.4**.* |
+| **FR-R11** | **Concurrency** semantics for **PATCH** (e.g. ETags or conflict responses) where concurrent edits matter. *Shipped: **§1.4**.* |
 
 ### 2.4 Authorization and roles
 
 | ID | Requirement |
 |----|-------------|
-| **FR-Z1** | **Roles or scopes** beyond a single **`chain_id`** (e.g. front desk, revenue, read-only). |
-| **FR-Z2** | Distinct policies for **machine (M2M)** vs **user** tokens for sensitive operations (create, confirm, cancel). |
+| **FR-Z1** | **Roles or scopes** beyond a single **`chain_id`** (e.g. front desk, revenue, read-only). *Shipped: gateway roles claim (**§1.1 FR-A6**).* |
+| **FR-Z2** | Distinct policies for **machine (M2M)** vs **user** tokens for sensitive operations (create, confirm, cancel). *Shipped: M2M restricted when roles enforced.* |
 
 ### 2.5 Observability and reliability
 
@@ -125,7 +135,7 @@ Prioritize into releases (e.g. commercial → search → operations).
 
 | ID | Requirement |
 |----|-------------|
-| **FR-D1** | **Automated** contract or integration tests in CI (staging or mocked dependencies). |
+| **FR-D1** | **Automated** contract or integration tests in CI (staging or mocked dependencies). *Partial: Vitest unit tests + **OpenAPI contract guard**; post-deploy public smoke on **`main`**; golden-path script planned (**7B**).* |
 | **FR-D2** | Root **README** and Postman docs stay aligned on which variables live in **environment** vs **collection**. |
 
 ### 2.7 Client applications (dependent on API)
@@ -152,3 +162,4 @@ Prioritize into releases (e.g. commercial → search → operations).
 | 2026-04-12 | Initial document: §1 as-built through migration 0012; §2 backlog. |
 | 2026-04-12 | Link to `IMPLEMENTATION_PLAN.md` for phased backlog delivery. |
 | 2026-04-07 | §1 through migration **0014** (rate plans, promotions, blocks, policies, search, calendar); §2 notes for shipped **FR-C1–C3**, **FR-V1–V4**; **§1.3b** (**FR-V1/V2** as-built). |
+| 2026-06-27 | §1 through **0016** (soft holds, ETags, cancellation, notes, roles); §2 marks shipped **FR-C5/C6**, **FR-V5**, **FR-R8–R11**, **FR-Z1/Z2**; Phase **7A/7C** CI contract + smoke. |

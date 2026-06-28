@@ -1,6 +1,6 @@
 # Feature requirement status (tracker)
 
-Aligned with [`REQUIREMENTS.md`](REQUIREMENTS.md) **§2** backlog and [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) phases 0–6.
+Aligned with [`REQUIREMENTS.md`](REQUIREMENTS.md) **§2** backlog and [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) phases 0–7 (batch 1).
 
 | FR | Summary | Status |
 |----|---------|--------|
@@ -25,6 +25,8 @@ Aligned with [`REQUIREMENTS.md`](REQUIREMENTS.md) **§2** backlog and [`IMPLEMEN
 | FR-R10 | Reservation notes | **`internal_note`**, **`guest_note`** on **`reservation_stub`**; **`PATCH /v1/reservations/{id}/notes`** (**0016**). |
 | FR-Z1 | Roles / scopes | Gateway enforces route policies when claim **`https://hospitality.app/claims/roles`** is present (`read_only`, `front_desk`, `manager`, `integration`). |
 | FR-Z2 | M2M vs user | **`gty: client-credentials`** tokens with roles enforced: read + create only (no confirm/cancel/guest/notes write). |
+| FR-D1 | CI / contract tests | Vitest unit tests; **OpenAPI contract guard** (`tests/openapi-contract.test.ts`); **post-deploy smoke** on `main` (`scripts/smoke-deploy-public.mjs`, secret **`GATEWAY_BASE_URL`**). Golden-path script (**7B**) planned. |
+| FR-D2 | README / docs sync | **README** + **REQUIREMENTS §1** through migration **0016** (Phase **7F**). |
 
 **Migrations:** apply through [`0016_cancellation_notes.sql`](../supabase/migrations/0016_cancellation_notes.sql).
 

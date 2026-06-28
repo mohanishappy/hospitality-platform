@@ -11,9 +11,10 @@ Microservices on **Cloudflare Workers** with **Supabase Postgres** and **Auth0**
 | `services/inventory` | Hotels + **room types** (list/detail under gateway) |
 | `services/reservations` | **POST/PATCH/GET** reservations; list; **status** lifecycle; idempotent **201**/**200** on create |
 | `supabase/config.toml` | Supabase CLI config (local dev / **`supabase db push`** to a linked project) |
-| `supabase/migrations` | SQL: through **`0014` — rate plans, LOS tiers, promotions, inventory blocks, booking policies, search + calendar RPCs** |
+| `supabase/migrations` | SQL: through **`0016` — cancellation metadata, reservation notes, soft holds, ETags, rate plans, search, calendar** |
 | `postman/` | Postman **collection** + **example environment** for gateway requests ([`postman/README.md`](postman/README.md)) |
-| `docs/FR_STATUS.md` | Backlog **FR** status through phases **0–4** (what shipped vs planned) |
+| `docs/FR_STATUS.md` | Backlog **FR** status through phases **0–6** (what shipped vs planned) |
+| `scripts/smoke-deploy-public.mjs` | Post-deploy public smoke (`npm run smoke:deploy`; CI **smoke** job on `main`) |
 
 **API spec (gateway, public):** `GET /openapi.json` (OpenAPI 3.0); `GET /docs` (Swagger UI — use **Authorize** with a Bearer token for protected operations). Contract source: `services/gateway/src/openapi.json`.
 
@@ -27,7 +28,7 @@ Microservices on **Cloudflare Workers** with **Supabase Postgres** and **Auth0**
 ## 1) Supabase
 
 1. Create a project.
-2. Run migrations in order in the SQL editor (or `supabase db push`): [`0001_init.sql`](supabase/migrations/0001_init.sql) through [`0014_phase3_phase4_rate_plans_search_policies.sql`](supabase/migrations/0014_phase3_phase4_rate_plans_search_policies.sql) — see earlier numbered files for inventory/reservations/RPC history.
+2. Run migrations in order in the SQL editor (or `supabase db push`): [`0001_init.sql`](supabase/migrations/0001_init.sql) through [`0016_cancellation_notes.sql`](supabase/migrations/0016_cancellation_notes.sql).
 3. **Turn on the Data API** (REST / PostgREST): Dashboard → **Project Settings** → **Data API** — use **Enable** if the API is off. Your Workers call this layer; it must be on.
 4. **Expose API schemas** (required for `supabase-js` `.schema(...)`): same **Data API** page (or **Project Settings → API** on older dashboards) → **Exposed schemas**. Include at least `public`, `inventory`, and `reservations` (comma-separated; keep existing entries like `public`). Save. Without this, hotels returns `Invalid schema: inventory`.  
    *Some UIs only show “Exposed schemas” after the Data API is enabled.*
@@ -100,7 +101,7 @@ npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 
 ### Automated deploy (GitHub Actions)
 
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on **every push and pull request**: **`npm ci`**, **`npm test`**, then **typechecks** all three Workers. On **`main`** only (push or **Run workflow**), it applies **Supabase migrations** (`supabase db push`), then deploys **inventory → reservations → gateway** (same order as `npm run deploy:all`).
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on **every push and pull request**: **`npm ci`**, **`npm test`** (including OpenAPI contract guard), then **typechecks** all three Workers. On **`main`** only (push or **Run workflow**), it applies **Supabase migrations** (`supabase db push`), deploys **inventory → reservations → gateway**, then **post-deploy smoke** against **`GATEWAY_BASE_URL`**.
 
 **Repository secrets** (GitHub → **Settings** → **Secrets and variables** → **Actions**):
 
@@ -109,10 +110,13 @@ npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 | **`SUPABASE_ACCESS_TOKEN`**, **`SUPABASE_PROJECT_REF`**, **`SUPABASE_DB_PASSWORD`** | Required for the **migrate** job on `main` (see [Database migrations](#database-migrations-cli-or-github-actions) above). |
 | **`CLOUDFLARE_API_TOKEN`** | API token with **Workers Scripts: Edit** (and **Account: Read** if prompted). Create under [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens) (e.g. “Edit Cloudflare Workers” template, scoped to the right account). |
 | **`CLOUDFLARE_ACCOUNT_ID`** | Cloudflare account ID (Workers dashboard URL or **Account Home** → right sidebar). |
+| **`GATEWAY_BASE_URL`** | Deployed gateway root (no trailing slash), e.g. `https://hospitality-gateway.<subdomain>.workers.dev` — used by the **smoke** job after deploy (**7A**). |
 
 **Not stored in GitHub:** Worker runtime secrets (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `AUTH0_*`). Set those once per Worker with `wrangler secret put` (or the dashboard); CI only publishes new **code** bundles and runs **remote** DB migrations against the linked Supabase project.
 
 You can re-run a deploy from the **Actions** tab (**Run workflow**) without pushing.
+
+After deploy on `main`, CI runs **`node scripts/smoke-deploy-public.mjs`** against **`GATEWAY_BASE_URL`** (`GET /health`, `/health/ready`, `/openapi.json`). Run locally: `GATEWAY_BASE_URL=https://... npm run smoke:deploy`.
 
 ## Postman
 
@@ -173,15 +177,21 @@ npm run dev:gateway        # other terminal; needs bindings to the other two
 **Routed paths (through gateway):**
 
 - `GET /health` — no auth.
+- `GET /health/ready` — no auth; JWKS check (Auth0 config).
+- `GET /openapi.json`, `GET /docs` — no auth; public API contract.
 - `GET /v1/inventory/hotels` — Bearer + claim `https://hospitality.app/claims/chain_id`.
 - `GET /v1/inventory/hotels/:id` — same; one hotel for that chain (**404** if wrong id/chain).
 - `GET /v1/inventory/hotels/:hotelId/room-types` — same; **`room_types[]`** include **`units_total`**, **`overbooking_allowance`**, **`base_rate_cents`**, **`currency`**, **`tax_rate_bps`**, **`fee_fixed_cents`** after **`0012`** (**404** if hotel not in chain).
-- `GET /v1/inventory/hotels/:hotelId/room-types/:roomTypeId/availability?check_in=&check_out=` — per-**night** **bookable** flag + **pricing** quote (needs **`0012`**).
-- `GET /v1/reservations` — same auth; paginated list for the token’s **`chain_id`** (`?limit` default 20 max 100, `?offset` default **0**); body omits **`guest`** (use **GET …/:id**).
-- `POST /v1/reservations` — same auth + `Idempotency-Key` + JSON body (`hotel_id`, `room_type_id`, `check_in` / `check_out` as **YYYY-MM-DD**, nested `guest`).
-- `GET /v1/reservations/:id` — same auth; returns reservation + nested **`guest`** for that `chain_id`.
-- `PATCH /v1/reservations/:id` — same auth; JSON `{"status":"confirmed"|"cancelled"|"pending"}` (**lifecycle**: `pending`→`confirmed`|`cancelled`; `confirmed`→`cancelled`; same status **no-op**; **409** on invalid change). Responses include **`updated_at`** after **`0009`**.
-- `PATCH /v1/reservations/:id/guest` — same auth; partial JSON with at least one of **`first_name`**, **`last_name`**, **`email`**, **`phone`** (use **`phone`: `null`** to clear). Bumps **`guest.updated_at`** and **`reservation.updated_at`** (requires **`0010`**).
+- `GET /v1/inventory/hotels/:hotelId/room-types/:roomTypeId/availability?check_in=&check_out=` — per-**night** **bookable** + **pricing**; optional **`rate_plan_code`** / **`promotion_code`**.
+- `GET /v1/inventory/search` — multi-hotel/room search (**0014**+).
+- `GET /v1/inventory/hotels/:hotelId/room-types/:roomTypeId/calendar?from=&to=` — per-day calendar (**0014**+).
+- `POST …/soft-holds`, `DELETE /v1/inventory/soft-holds/:holdId` — TTL soft holds (**0015**).
+- `GET /v1/reservations` — list with optional **`status`**, **`hotel_id`**, **`stay_from`**/**`stay_to`** filters (**0013**+).
+- `POST /v1/reservations` — same auth + `Idempotency-Key` + JSON body; optional **`expected_total_cents`** for quote parity.
+- `GET /v1/reservations/:id` — reservation + **`guest`**; response **`ETag`** from **`row_version`** (**0015**).
+- `PATCH /v1/reservations/:id` — **`status`** lifecycle; optional **`cancellation_reason`** when cancelling; optional **`If-Match`** → **412** (**0015**/**0016**).
+- `PATCH /v1/reservations/:id/guest` — partial guest fields; optional **`If-Match`**.
+- `PATCH /v1/reservations/:id/notes` — **`internal_note`**, **`guest_note`** (**0016**); optional **`If-Match`**.
 
 ## Conventions (from architecture plan)
 
@@ -191,5 +201,5 @@ npm run dev:gateway        # other terminal; needs bindings to the other two
 
 ## Next steps
 
-- Richer **commercial** rules (LOS pricing, promos, itemized fees), **calendar** inventory UI, **rate plans**.
-- Lightweight **UI** (Vite + React) with Auth0 SPA + gateway calls.
+- **Phase 7** (in progress): golden-path smoke script, metrics, readiness + Supabase ping — see [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
+- **Phase 8**: guest/staff SPA (Vite + React + Auth0).
