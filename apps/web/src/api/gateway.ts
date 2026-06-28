@@ -18,6 +18,175 @@ export type HotelsResponse = {
   hotels: HotelSummary[];
 };
 
+export type FeeLineItem = {
+  code?: string;
+  label?: string;
+  amount_cents?: number;
+};
+
+export type StayPricing = {
+  currency?: string;
+  base_rate_cents_per_night?: number | null;
+  nightly_rate_cents?: number | null;
+  nights?: number;
+  room_subtotal_cents?: number | null;
+  discount_cents?: number;
+  tax_rate_bps?: number;
+  tax_cents?: number;
+  fee_fixed_cents?: number;
+  fee_line_items?: FeeLineItem[];
+  total_cents?: number;
+  rate_plan_code?: string | null;
+  promotion_code?: string | null;
+};
+
+export type InventorySearchHit = {
+  hotel_id: string;
+  hotel_name: string;
+  room_type_id: string;
+  room_type_name: string;
+  check_in: string;
+  check_out: string;
+  nights: number;
+  bookable: boolean;
+  pricing?: StayPricing;
+};
+
+export type SearchResponse = {
+  results: InventorySearchHit[];
+};
+
+export type AvailabilityQuote = {
+  room_type_id: string;
+  hotel_id: string;
+  check_in: string;
+  check_out: string;
+  nights: number;
+  bookable: boolean;
+  remaining_units_on_tightest_night?: number;
+  pricing?: StayPricing;
+};
+
+export type AvailabilityResponse = {
+  availability: AvailabilityQuote;
+};
+
+export type GuestInput = {
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone?: string;
+};
+
+export type PricingSnapshot = {
+  currency?: string;
+  room_subtotal_cents?: number;
+  tax_cents?: number;
+  fee_line_items?: FeeLineItem[];
+  total_cents?: number;
+};
+
+export type ReservationDetail = {
+  id: string;
+  hotel_id: string;
+  room_type_id: string;
+  check_in: string;
+  check_out: string;
+  status: "pending" | "confirmed" | "cancelled";
+  row_version?: number;
+  cancellation_reason?: CancellationReason | null;
+  cancelled_at?: string | null;
+  internal_note?: string | null;
+  guest_note?: string | null;
+  pricing_snapshot?: PricingSnapshot | null;
+  created_at?: string;
+  updated_at?: string;
+  guest?: {
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+    phone?: string | null;
+  } | null;
+};
+
+export type ReservationListItem = Omit<ReservationDetail, "guest">;
+
+export type CancellationReason =
+  | "guest_request"
+  | "no_show"
+  | "duplicate"
+  | "rate_dispute"
+  | "other";
+
+export type ReservationsListResponse = {
+  reservations: ReservationListItem[];
+  limit: number;
+  offset: number;
+  has_more: boolean;
+};
+
+export type ReservationResponse = {
+  reservation: ReservationDetail;
+};
+
+export type CreateReservationResponse = {
+  reservation: ReservationDetail;
+  idempotency_key: string;
+  idempotent_replay: boolean;
+};
+
+export type RoomTypeSummary = {
+  id: string;
+  hotel_id: string;
+  name: string;
+  code: string;
+  units_total?: number;
+};
+
+export type RoomTypesResponse = {
+  hotel_id: string;
+  room_types: RoomTypeSummary[];
+};
+
+export type CalendarDay = {
+  date: string;
+  occupancy?: number;
+  soft_hold_units?: number;
+  units_blocked?: number;
+  sellable_capacity?: number;
+  remaining_units?: number;
+  bookable?: boolean;
+};
+
+export type CalendarResponse = {
+  days: CalendarDay[];
+};
+
+export type ChainSummary = {
+  id: string;
+  code: string;
+  name: string;
+};
+
+export type ChainsResponse = {
+  chains: ChainSummary[];
+};
+
+export type ChainResponse = {
+  chain: ChainSummary;
+};
+
+export type BookingAuth =
+  | { kind: "token"; accessToken: string }
+  | { kind: "chain"; chainCode: string };
+
+function bookingAuthHeaders(auth: BookingAuth): Record<string, string> {
+  if (auth.kind === "token") {
+    return { Authorization: `Bearer ${auth.accessToken}` };
+  }
+  return { "x-chain-code": auth.chainCode.trim().toUpperCase() };
+}
+
 export class GatewayError extends Error {
   status: number;
 
@@ -28,11 +197,27 @@ export class GatewayError extends Error {
   }
 }
 
-export async function gatewayFetch<T>(
+type GatewayResult<T> = {
+  body: T;
+  etag: string | null;
+  status: number;
+};
+
+function parseErrorBody(body: unknown, fallback: string): string {
+  if (typeof body === "object" && body !== null && "detail" in body) {
+    return String((body as { detail: unknown }).detail);
+  }
+  if (typeof body === "object" && body !== null && "title" in body) {
+    return String((body as { title: unknown }).title);
+  }
+  return fallback;
+}
+
+async function gatewayRequest<T>(
   gatewayUrl: string,
   path: string,
   init: RequestInit = {}
-): Promise<T> {
+): Promise<GatewayResult<T>> {
   const res = await fetch(`${gatewayUrl}${path}`, {
     ...init,
     headers: {
@@ -50,16 +235,26 @@ export async function gatewayFetch<T>(
   }
 
   if (!res.ok) {
-    const detail =
-      typeof body === "object" && body !== null && "detail" in body
-        ? String((body as { detail: unknown }).detail)
-        : typeof body === "object" && body !== null && "title" in body
-          ? String((body as { title: unknown }).title)
-          : res.statusText;
-    throw new GatewayError(res.status, detail || `HTTP ${res.status}`);
+    throw new GatewayError(
+      res.status,
+      parseErrorBody(body, res.statusText || `HTTP ${res.status}`)
+    );
   }
 
-  return body as T;
+  return {
+    body: body as T,
+    etag: res.headers.get("ETag"),
+    status: res.status,
+  };
+}
+
+export async function gatewayFetch<T>(
+  gatewayUrl: string,
+  path: string,
+  init: RequestInit = {}
+): Promise<T> {
+  const result = await gatewayRequest<T>(gatewayUrl, path, init);
+  return result.body;
 }
 
 export function fetchHealth(gatewayUrl: string) {
@@ -70,8 +265,209 @@ export function fetchReadiness(gatewayUrl: string) {
   return gatewayFetch<ReadinessResponse>(gatewayUrl, "/health/ready");
 }
 
-export function fetchHotels(gatewayUrl: string, accessToken: string) {
+export function fetchHotels(
+  gatewayUrl: string,
+  auth: BookingAuth | string
+) {
+  const headers =
+    typeof auth === "string"
+      ? { Authorization: `Bearer ${auth}` }
+      : bookingAuthHeaders(auth);
   return gatewayFetch<HotelsResponse>(gatewayUrl, "/v1/inventory/hotels", {
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers,
   });
+}
+
+export function fetchChains(gatewayUrl: string) {
+  return gatewayFetch<ChainsResponse>(gatewayUrl, "/v1/inventory/chains");
+}
+
+export function fetchChainByCode(gatewayUrl: string, chainCode: string) {
+  return gatewayFetch<ChainResponse>(
+    gatewayUrl,
+    `/v1/inventory/chains/${encodeURIComponent(chainCode.trim().toUpperCase())}`
+  );
+}
+
+export function fetchSearch(
+  gatewayUrl: string,
+  auth: BookingAuth | string,
+  params: { checkIn: string; checkOut: string; hotelIds?: string[] }
+) {
+  const headers =
+    typeof auth === "string"
+      ? { Authorization: `Bearer ${auth}` }
+      : bookingAuthHeaders(auth);
+  const qs = new URLSearchParams({
+    check_in: params.checkIn,
+    check_out: params.checkOut,
+    sort: "price",
+    limit: "20",
+  });
+  if (params.hotelIds?.length) {
+    qs.set("hotel_ids", params.hotelIds.join(","));
+  }
+  return gatewayFetch<SearchResponse>(
+    gatewayUrl,
+    `/v1/inventory/search?${qs.toString()}`,
+    { headers }
+  );
+}
+
+export function fetchAvailability(
+  gatewayUrl: string,
+  auth: BookingAuth | string,
+  params: {
+    hotelId: string;
+    roomTypeId: string;
+    checkIn: string;
+    checkOut: string;
+  }
+) {
+  const headers =
+    typeof auth === "string"
+      ? { Authorization: `Bearer ${auth}` }
+      : bookingAuthHeaders(auth);
+  const qs = new URLSearchParams({
+    check_in: params.checkIn,
+    check_out: params.checkOut,
+  });
+  return gatewayFetch<AvailabilityResponse>(
+    gatewayUrl,
+    `/v1/inventory/hotels/${params.hotelId}/room-types/${params.roomTypeId}/availability?${qs.toString()}`,
+    { headers }
+  );
+}
+
+export function createReservation(
+  gatewayUrl: string,
+  auth: BookingAuth | string,
+  idempotencyKey: string,
+  body: {
+    hotel_id: string;
+    room_type_id: string;
+    check_in: string;
+    check_out: string;
+    expected_total_cents?: number;
+    guest: GuestInput;
+  }
+) {
+  const headers: Record<string, string> = {
+    ...(typeof auth === "string"
+      ? { Authorization: `Bearer ${auth}` }
+      : bookingAuthHeaders(auth)),
+    "Content-Type": "application/json",
+    "Idempotency-Key": idempotencyKey,
+  };
+  return gatewayFetch<CreateReservationResponse>(gatewayUrl, "/v1/reservations", {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+}
+
+export function fetchRoomTypes(
+  gatewayUrl: string,
+  accessToken: string,
+  hotelId: string
+) {
+  return gatewayFetch<RoomTypesResponse>(
+    gatewayUrl,
+    `/v1/inventory/hotels/${hotelId}/room-types`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+}
+
+export function fetchCalendar(
+  gatewayUrl: string,
+  accessToken: string,
+  params: {
+    hotelId: string;
+    roomTypeId: string;
+    from: string;
+    to: string;
+  }
+) {
+  const qs = new URLSearchParams({ from: params.from, to: params.to });
+  return gatewayFetch<CalendarResponse>(
+    gatewayUrl,
+    `/v1/inventory/hotels/${params.hotelId}/room-types/${params.roomTypeId}/calendar?${qs.toString()}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+}
+
+export function listReservations(
+  gatewayUrl: string,
+  accessToken: string,
+  params: {
+    limit?: number;
+    offset?: number;
+    status?: ReservationDetail["status"];
+    hotelId?: string;
+  } = {}
+) {
+  const qs = new URLSearchParams({
+    limit: String(params.limit ?? 20),
+    offset: String(params.offset ?? 0),
+  });
+  if (params.status) qs.set("status", params.status);
+  if (params.hotelId) qs.set("hotel_id", params.hotelId);
+  return gatewayFetch<ReservationsListResponse>(
+    gatewayUrl,
+    `/v1/reservations?${qs.toString()}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+}
+
+export function getReservation(
+  gatewayUrl: string,
+  accessToken: string,
+  reservationId: string
+) {
+  return gatewayRequest<ReservationResponse>(
+    gatewayUrl,
+    `/v1/reservations/${reservationId}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+}
+
+export function patchReservationStatus(
+  gatewayUrl: string,
+  accessToken: string,
+  reservationId: string,
+  body: {
+    status: ReservationDetail["status"];
+    cancellation_reason?: CancellationReason;
+  },
+  ifMatch?: string | null
+) {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
+  };
+  if (ifMatch) headers["If-Match"] = ifMatch;
+  return gatewayRequest<ReservationResponse>(
+    gatewayUrl,
+    `/v1/reservations/${reservationId}`,
+    { method: "PATCH", headers, body: JSON.stringify(body) }
+  );
+}
+
+export function patchReservationNotes(
+  gatewayUrl: string,
+  accessToken: string,
+  reservationId: string,
+  body: { internal_note?: string | null; guest_note?: string | null },
+  ifMatch?: string | null
+) {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
+  };
+  if (ifMatch) headers["If-Match"] = ifMatch;
+  return gatewayRequest<ReservationResponse>(
+    gatewayUrl,
+    `/v1/reservations/${reservationId}/notes`,
+    { method: "PATCH", headers, body: JSON.stringify(body) }
+  );
 }

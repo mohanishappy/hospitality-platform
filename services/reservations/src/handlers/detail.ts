@@ -1,6 +1,12 @@
 import type { Context } from "hono";
 import type { Env } from "../types";
 import { normalizeRowVersion, weakEtag } from "../etag";
+import {
+  guestScopeFromHeaders,
+  redactStaffFields,
+  requiresGuestEmailScope,
+  reservationOwnedByGuestEmail,
+} from "../guest-scope";
 import { problem } from "../problem";
 import { RESERVATION_DETAIL_SELECT } from "../selects";
 import { supaClient } from "../supabase";
@@ -17,6 +23,18 @@ export async function getReservation(c: Context<{ Bindings: Env }>) {
   if (!c.env.SUPABASE_URL || !c.env.SUPABASE_SERVICE_ROLE_KEY) {
     return problem(500, "Misconfigured", "Supabase env missing");
   }
+  const scope = guestScopeFromHeaders({
+    roles: c.req.header("x-roles"),
+    userEmail: c.req.header("x-user-email"),
+  });
+  const guestScoped = requiresGuestEmailScope(scope.roles);
+  if (guestScoped && !scope.userEmail) {
+    return problem(
+      403,
+      "Forbidden",
+      "Guest access requires an email claim on the access token"
+    );
+  }
   const supa = supaClient(c.env);
   const { data, error } = await supa
     .schema("reservations")
@@ -31,10 +49,25 @@ export async function getReservation(c: Context<{ Bindings: Env }>) {
   if (!data) {
     return problem(404, "Not Found", "Reservation not found for this chain");
   }
+  if (
+    guestScoped &&
+    scope.userEmail &&
+    !(await reservationOwnedByGuestEmail(
+      supa,
+      chainId,
+      id.trim(),
+      scope.userEmail
+    ))
+  ) {
+    return problem(404, "Not Found", "Reservation not found for this chain");
+  }
+  const reservation = guestScoped
+    ? redactStaffFields(data as Record<string, unknown>)
+    : data;
   const rv = normalizeRowVersion(
-    (data as { row_version?: unknown }).row_version
+    (reservation as { row_version?: unknown }).row_version
   );
-  const res = c.json({ reservation: data });
+  const res = c.json({ reservation });
   if (rv !== null) {
     res.headers.set("ETag", weakEtag(rv));
   }

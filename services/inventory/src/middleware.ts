@@ -7,6 +7,7 @@ export const requireChainForInventory: MiddlewareHandler<{ Bindings: Env }> = as
   next
 ) => {
   if (c.req.path === "/health") return next();
+  if (/^\/v1\/inventory\/chains(\/[^/]+)?$/.test(c.req.path)) return next();
   if (c.req.path.startsWith("/v1/inventory") && !c.req.header("x-chain-id")) {
     return problem(401, "Unauthorized", "Missing x-chain-id (use gateway)");
   }

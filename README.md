@@ -12,7 +12,7 @@ Microservices on **Cloudflare Workers** with **Supabase Postgres** and **Auth0**
 | `services/reservations` | **POST/PATCH/GET** reservations; list; **status** lifecycle; idempotent **201**/**200** on create |
 | `supabase/config.toml` | Supabase CLI config (local dev / **`supabase db push`** to a linked project) |
 | `supabase/migrations` | SQL: through **`0016` — cancellation metadata, reservation notes, soft holds, ETags, rate plans, search, calendar** |
-| `apps/web` | **Phase 8A** SPA shell — Vite + React + Auth0; gateway health + hotels list ([`.env.example`](apps/web/.env.example)) |
+| `apps/web` | **Phase 8A–8D** SPA — Vite + React + Auth0; health, booking, calendar, staff reservations ([`.env.example`](apps/web/.env.example)) |
 | `postman/` | Postman **collection** + **example environment** for gateway requests ([`postman/README.md`](postman/README.md)) |
 | `docs/FR_STATUS.md` | Backlog **FR** status through phases **0–7** (what shipped vs planned) |
 | `scripts/smoke-deploy-public.mjs` | Post-deploy public smoke (`npm run smoke:deploy`; CI **smoke** job on `main`) |
@@ -65,6 +65,60 @@ npx supabase db push
 1. Create an **API** with identifier = your `AUTH0_AUDIENCE` (e.g. `https://hospitality-api`).
 2. Create a **Single Page Application** (for the UI later) with allowed callbacks.
 3. Add an **Action** (post-login / credentials) to put **`https://hospitality.app/claims/chain_id`** into the access token as a UUID string matching **`inventory.chain.id`** for that tenant. Demo seed: `00000000-0000-0000-0000-000000000001`. After [`0005_realistic_catalog_seed.sql`](supabase/migrations/0005_realistic_catalog_seed.sql), additional chains use fixed ids in that file (e.g. Harborline `a1111111-1111-4111-8111-111111111111`) — use a separate M2M client or metadata-driven Action if you need multiple tenants in Auth0.
+
+**Post Login Action (SPA users)** — Auth0 Dashboard → Actions → Library → **Build Custom** → trigger **Login / Post Login**. Enable **RBAC** on your API (Settings → RBAC Settings → **Enable RBAC**, **Add Permissions in the Access Token**). Create roles **`guest`**, **`front_desk`**, **`manager`**, **`read_only`** and assign them to users as needed.
+
+```javascript
+/**
+ * @param {Event} event — https://auth0.com/docs/customize/actions/flows-and-triggers/login-flow
+ * @param {PostLoginAPI} api
+ */
+exports.onExecutePostLogin = async (event, api) => {
+  const ns = "https://hospitality.app/claims";
+
+  // Must match inventory.chain.id for this tenant (see README / seed migrations).
+  const CHAIN_ID = "00000000-0000-0000-0000-000000000001";
+
+  api.accessToken.setCustomClaim(`${ns}/chain_id`, CHAIN_ID);
+
+  const assigned =
+    event.authorization?.roles?.map((role) => role.name).filter(Boolean) ?? [];
+
+  // No Auth0 role → guest (book + own reservations only).
+  api.accessToken.setCustomClaim(`${ns}/roles`, assigned.length > 0 ? assigned : ["guest"]);
+
+  // Auth0 API access tokens omit `email` unless added explicitly (needed for guest scoping).
+  if (event.user.email) {
+    api.accessToken.setCustomClaim(`${ns}/email`, event.user.email);
+  }
+
+  // Optional: same claims on ID token for debugging in the SPA.
+  api.idToken.setCustomClaim(`${ns}/chain_id`, CHAIN_ID);
+  api.idToken.setCustomClaim(`${ns}/roles`, assigned.length > 0 ? assigned : ["guest"]);
+  if (event.user.email) {
+    api.idToken.setCustomClaim(`${ns}/email`, event.user.email);
+  }
+};
+```
+
+Add the Action to the **Login** flow. The SPA requests scope **`openid profile email`**; still add **`${ns}/email`** in the Action because Auth0 often does **not** put `email` on API access tokens by default.
+
+**Credentials Exchange Action (M2M)** — same `chain_id` claim; omit roles or set `["integration"]` / `["manager"]` as needed. M2M tokens without a roles claim keep legacy full API access at the gateway.
+
+**After changing the Action or role model:** log out of the SPA (clears cached tokens), log in again, and **redeploy the gateway** (and reservations worker if you use guest scoping):
+
+```bash
+npm run deploy:gateway
+npm run deploy:reservations
+```
+
+The deployed gateway must include the **`guest`** role map — otherwise tokens with `roles: ["guest"]` get **403 Forbidden** on every route (including search).
+
+**Quick JWT check:** decode the access token at [jwt.io](https://jwt.io) and confirm:
+
+- `https://hospitality.app/claims/chain_id` — UUID matching your seed chain
+- `https://hospitality.app/claims/roles` — `["guest"]` for users with no Auth0 role
+- `https://hospitality.app/claims/email` — login email (required for guest “my reservations”)
 
 ## 3) Cloudflare — first-time deploy order
 
@@ -141,12 +195,12 @@ Import **`postman/hospitality-platform.postman_collection.json`**, create a **lo
 
 Responses include **`x-request-id`** for correlation; send the same header to trace a request end-to-end.
 
-## Web app (Phase 8A)
+## Web app (Phase 8A–8D + public booking)
 
-Staff/guest **SPA shell** under [`apps/web`](apps/web): Auth0 login, live **`/health`** + **`/health/ready`**, and authenticated **`GET /v1/inventory/hotels`**.
+Staff/guest **SPA** under [`apps/web`](apps/web): **path-based tenants** at **`/c/:chainCode`** (e.g. `/c/HBR`), anonymous **search → quote → book** via **`x-chain-code`**, optional Auth0 login for staff calendar and reservation tools.
 
 1. In Auth0, create a **Single Page Application** (separate from M2M). Set **Allowed Callback URLs**, **Allowed Logout URLs**, and **Allowed Web Origins** to `http://localhost:5173` and your production Pages URL (e.g. `https://hospitality-web.pages.dev` after first deploy). Authorize it for your API audience.
-2. For user login, add a **Post Login** Action that sets claim **`https://hospitality.app/claims/chain_id`** (same as your M2M Credentials Exchange Action).
+2. For user login, use the **Post Login Action** in [§2 Auth0](#2-auth0) (sets **`chain_id`**, **`roles`**, default **`guest`**, and requires **`email`** scope on the SPA).
 3. Copy [`apps/web/.env.example`](apps/web/.env.example) → `apps/web/.env` and fill **`VITE_*`** values.
 4. From repo root:
 
@@ -155,7 +209,9 @@ npm install
 npm run dev:web
 ```
 
-Open `http://localhost:5173`, log in, and confirm hotels load for your chain.
+Open `http://localhost:5173` for the brand picker, or go directly to e.g. `http://localhost:5173/c/DEMO` to book without logging in. Sign in on a chain page to view **My reservations**; staff roles also see availability and reservation management on that chain.
+
+**Public booking API:** the gateway allows unauthenticated **`GET /v1/inventory/chains`**, search, hotels, availability, and **`POST /v1/reservations`** when the client sends **`x-chain-code: HBR`** (resolved to `x-chain-id` upstream). The gateway worker needs **`SUPABASE_URL`** + **`SUPABASE_SERVICE_ROLE_KEY`** for chain-code lookup (same optional secrets as **`/health/ready`**).
 
 ### Deploy web (Cloudflare Pages)
 

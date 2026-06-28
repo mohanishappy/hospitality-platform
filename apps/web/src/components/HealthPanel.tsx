@@ -8,6 +8,7 @@ import {
 
 type Props = {
   gatewayUrl: string;
+  compact?: boolean;
 };
 
 type LoadState =
@@ -15,7 +16,7 @@ type LoadState =
   | { kind: "ok"; health: HealthResponse; ready: ReadinessResponse }
   | { kind: "error"; message: string };
 
-export function HealthPanel({ gatewayUrl }: Props) {
+export function HealthPanel({ gatewayUrl, compact = false }: Props) {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
 
   useEffect(() => {
@@ -45,6 +46,23 @@ export function HealthPanel({ gatewayUrl }: Props) {
       cancelled = true;
     };
   }, [gatewayUrl]);
+
+  if (compact) {
+    if (state.kind === "loading") {
+      return <p className="footer-status muted">Checking service status…</p>;
+    }
+    if (state.kind === "error") {
+      return (
+        <p className="footer-status bad">Booking service unavailable</p>
+      );
+    }
+    const ok = state.health.ok && state.ready.ok;
+    return (
+      <p className={`footer-status ${ok ? "ok" : "bad"}`}>
+        {ok ? "All systems operational" : "Some services are unavailable"}
+      </p>
+    );
+  }
 
   return (
     <section className="panel">

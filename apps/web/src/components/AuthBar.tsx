@@ -4,39 +4,57 @@ type Props = {
   audience: string;
 };
 
-export function AuthBar({ audience }: Props) {
-  const { isAuthenticated, isLoading, user, loginWithRedirect, logout } =
+export function AuthBar({ audience: _audience }: Props) {
+  const { isAuthenticated, isLoading, error, user, loginWithRedirect, logout } =
     useAuth0();
 
+  const returnTo = window.location.pathname + window.location.search;
+
   if (isLoading) {
-    return <div className="auth-bar muted">Checking session…</div>;
+    return <div className="auth-bar auth-bar-compact muted">…</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="auth-bar auth-bar-compact">
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => loginWithRedirect({ appState: { returnTo } })}
+        >
+          Sign in
+        </button>
+      </div>
+    );
   }
 
   if (!isAuthenticated) {
     return (
-      <div className="auth-bar">
-        <p>Sign in to load hotels for your chain.</p>
-        <button type="button" onClick={() => loginWithRedirect()}>
-          Log in
+      <div className="auth-bar auth-bar-compact">
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => loginWithRedirect({ appState: { returnTo } })}
+        >
+          Sign in
         </button>
       </div>
     );
   }
 
   return (
-    <div className="auth-bar">
-      <div>
-        <strong>{user?.name ?? user?.email ?? "Signed in"}</strong>
-        <span className="muted"> · audience {audience}</span>
-      </div>
+    <div className="auth-bar auth-bar-compact">
+      <span className="auth-bar-user">
+        {user?.name ?? user?.email ?? "Account"}
+      </span>
       <button
         type="button"
         className="secondary"
         onClick={() =>
-          logout({ logoutParams: { returnTo: window.location.origin } })
+          logout({ logoutParams: { returnTo: window.location.origin + returnTo } })
         }
       >
-        Log out
+        Sign out
       </button>
     </div>
   );

@@ -14,6 +14,8 @@ export async function forward(
   if (roles !== undefined && roles !== null) {
     headers.set("x-roles", roles.join(","));
   }
+  const userEmail = c.get("userEmail");
+  if (userEmail) headers.set("x-user-email", userEmail);
   const requestId = c.get("requestId");
   if (requestId) headers.set("x-request-id", requestId);
   const method = c.req.raw.method;

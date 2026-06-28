@@ -18,4 +18,8 @@ export type GatewayVariables = {
   chainId?: string;
   /** Parsed roles claim; `null` when claim absent (legacy full access). */
   roles?: string[] | null;
+  /** Lowercased login email for guest-scoped reservation access. */
+  userEmail?: string;
+  /** Anonymous booking via `x-chain-code` (guest permissions only). */
+  isPublicBooking?: boolean;
 };

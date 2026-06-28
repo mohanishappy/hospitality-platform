@@ -1,5 +1,11 @@
 import type { Context } from "hono";
 import type { Env } from "../types";
+import {
+  guestScopeFromHeaders,
+  redactStaffFields,
+  requiresGuestEmailScope,
+  reservationOwnedByGuestEmail,
+} from "../guest-scope";
 import { problem } from "../problem";
 import { RESERVATION_LIST_SELECT } from "../selects";
 import { supaClient } from "../supabase";
@@ -19,12 +25,30 @@ export async function listReservations(c: Context<{ Bindings: Env }>) {
   }
   const { limit, offset } = parseListQuery(c);
   const fetchCount = limit + 1;
+  const scope = guestScopeFromHeaders({
+    roles: c.req.header("x-roles"),
+    userEmail: c.req.header("x-user-email"),
+  });
+  const guestScoped = requiresGuestEmailScope(scope.roles);
+  if (guestScoped && !scope.userEmail) {
+    return problem(
+      403,
+      "Forbidden",
+      "Guest access requires an email claim on the access token"
+    );
+  }
   const supa = supaClient(c.env);
+  const select = guestScoped
+    ? `${RESERVATION_LIST_SELECT}, guest!inner(email)`
+    : RESERVATION_LIST_SELECT;
   let q = supa
     .schema("reservations")
     .from("reservation_stub")
-    .select(RESERVATION_LIST_SELECT)
+    .select(select)
     .eq("chain_id", chainId);
+  if (guestScoped && scope.userEmail) {
+    q = q.eq("guest.email", scope.userEmail);
+  }
   if (filters.status) {
     q = q.eq("status", filters.status);
   }
@@ -44,7 +68,12 @@ export async function listReservations(c: Context<{ Bindings: Env }>) {
   }
   const rows = data ?? [];
   const hasMore = rows.length > limit;
-  const reservations = hasMore ? rows.slice(0, limit) : rows;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const reservations = guestScoped
+    ? (page as unknown as Record<string, unknown>[]).map((row) =>
+        redactStaffFields(row)
+      )
+    : page;
   return c.json({
     reservations,
     limit,

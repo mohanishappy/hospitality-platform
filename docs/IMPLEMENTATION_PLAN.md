@@ -183,3 +183,6 @@ Split so backend can ship while UI starts:
 | 2026-06-27 | Phase **7 batch 3**: **7D** structured logs + Analytics Engine; **7G** Newman in CI (**`scripts/run-newman.mjs`**). Phase **7 complete**. |
 | 2026-06-28 | Phase **8A**: **`apps/web`** SPA shell (Vite + React + Auth0; health + hotels list). |
 | 2026-06-28 | Phase **8E**: Cloudflare **Pages** deploy via CI **`deploy-web`** + **`npm run deploy:web`**. |
+| 2026-06-28 | Phase **8B**: guest **booking flow** in **`apps/web`** (search → quote → create → confirmation). |
+| 2026-06-28 | Phase **8C**: **staff calendar UI** — month grid from **`GET …/calendar`**. |
+| 2026-06-28 | Phase **8D**: **staff reservations UI** — list filters, detail, confirm/cancel, notes (**`If-Match`**). Phase **8 complete**. |

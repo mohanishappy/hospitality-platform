@@ -1,6 +1,6 @@
 import type { Context } from "hono";
 import type { JWTPayload } from "jose";
-import { getRoles, isM2mToken } from "./claims";
+import { getRoles, isM2mToken, normalizeRoleName } from "./claims";
 import { problem } from "./problem";
 import type { GatewayEnv, GatewayVariables } from "./types";
 
@@ -27,7 +27,14 @@ const ALL_PERMISSIONS: Permission[] = [
 ];
 
 const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
-  read_only: ["inventory:read", "reservations:read"],
+  /** Explicit no-op role (auditor placeholder). */
+  read_only: [],
+  guest: [
+    "inventory:read",
+    "reservations:read",
+    "reservations:create",
+    "reservations:cancel",
+  ],
   front_desk: [
     "inventory:read",
     "inventory:write",
@@ -35,6 +42,7 @@ const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
     "reservations:create",
     "reservations:guest",
     "reservations:confirm",
+    "reservations:cancel",
     "reservations:notes",
   ],
   manager: ALL_PERMISSIONS,
@@ -48,7 +56,7 @@ const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
 function permissionsForRoles(roles: string[]): Set<Permission> {
   const out = new Set<Permission>();
   for (const role of roles) {
-    const perms = ROLE_PERMISSIONS[role];
+    const perms = ROLE_PERMISSIONS[normalizeRoleName(role)];
     if (perms) {
       for (const p of perms) out.add(p);
     }
@@ -56,18 +64,29 @@ function permissionsForRoles(roles: string[]): Set<Permission> {
   return out;
 }
 
+function hasExplicitReadOnlyRole(roles: string[]): boolean {
+  return roles.some((r) => normalizeRoleName(r) === "read_only");
+}
+
 export function effectivePermissions(
   payload: JWTPayload,
   roles: string[] | null
 ): Set<Permission> | null {
   if (roles === null) {
-    return null;
+    return isM2mToken(payload) ? null : permissionsForRoles(["guest"]);
   }
   if (roles.length === 0) {
-    return permissionsForRoles(["read_only"]);
+    return permissionsForRoles(["guest"]);
   }
-  const perms = permissionsForRoles(roles);
-  if (isM2mToken(payload) && !roles.includes("manager")) {
+  let perms = permissionsForRoles(roles);
+  if (
+    perms.size === 0 &&
+    !isM2mToken(payload) &&
+    !hasExplicitReadOnlyRole(roles)
+  ) {
+    perms = permissionsForRoles(["guest"]);
+  }
+  if (isM2mToken(payload) && !roles.some((r) => normalizeRoleName(r) === "manager")) {
     for (const p of ALL_PERMISSIONS) {
       if (p !== "inventory:read" && p !== "reservations:read" && p !== "reservations:create") {
         perms.delete(p);
@@ -140,11 +159,37 @@ async function readPatchStatus(c: Context): Promise<string | undefined> {
   return undefined;
 }
 
+/** Guest-only permission check for anonymous public booking routes. */
+export async function enforcePublicBookingAuthorization(
+  c: Context<{ Bindings: GatewayEnv; Variables: GatewayVariables }>
+): Promise<Response | undefined> {
+  const granted = permissionsForRoles(["guest"]);
+  const statusBody = await readPatchStatus(c);
+  const needed = requiredPermissions(c.req.method, c.req.path, statusBody);
+  if (!hasPermission(granted, needed)) {
+    return problem(
+      403,
+      "Forbidden",
+      `Public booking not allowed for ${c.req.method} ${c.req.path}`,
+      "about:blank#forbidden"
+    );
+  }
+  return undefined;
+}
+
 export async function enforceRouteAuthorization(
   c: Context<{ Bindings: GatewayEnv; Variables: GatewayVariables }>
 ): Promise<Response | undefined> {
   const payload = c.get("jwt");
-  if (!payload) return undefined;
+  if (!payload) {
+    if (c.get("isPublicBooking")) return undefined;
+    return problem(
+      401,
+      "Unauthorized",
+      "Missing Bearer token",
+      "about:blank#missing-token"
+    );
+  }
 
   const roles = getRoles(payload);
   c.set("roles", roles);
