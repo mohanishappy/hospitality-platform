@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { fetchMyChains } from "../api/gateway";
+import { fetchMyChains, GatewayError } from "../api/gateway";
 import { decodeJwtPayload, parseRolesFromPayload } from "../lib/claims";
 import {
   parseActiveChainIdFromPayload,
@@ -34,6 +34,8 @@ type AccessClaimsValue = {
   isManager: boolean;
   isGuestOnly: boolean;
   isMultiChain: boolean;
+  /** Set when enterprise scope lookup fails (e.g. staff not provisioned in DB). */
+  accessWarning: string | null;
 };
 
 const AccessClaimsContext = createContext<AccessClaimsValue>({
@@ -47,6 +49,7 @@ const AccessClaimsContext = createContext<AccessClaimsValue>({
   isManager: false,
   isGuestOnly: false,
   isMultiChain: false,
+  accessWarning: null,
 });
 
 export function AccessClaimsProvider({
@@ -88,6 +91,7 @@ function useAccessClaimsState(
     undefined
   );
   const [resolvingChains, setResolvingChains] = useState(false);
+  const [accessWarning, setAccessWarning] = useState<string | null>(null);
 
   useEffect(() => {
     if (!ready) return;
@@ -97,6 +101,7 @@ function useAccessClaimsState(
       setEnterpriseId(undefined);
       setActiveChainId(undefined);
       setResolvingChains(false);
+      setAccessWarning(null);
       return;
     }
 
@@ -115,6 +120,7 @@ function useAccessClaimsState(
         setRoles(parsedRoles);
         setEnterpriseId(entId);
         setActiveChainId(active ?? undefined);
+        setAccessWarning(null);
 
         if (idsFromToken?.length) {
           setChainIds(idsFromToken);
@@ -124,11 +130,29 @@ function useAccessClaimsState(
 
         if (entId) {
           setResolvingChains(true);
-          const data = await fetchMyChains(gatewayUrl, token);
-          const ids = (data.chains ?? []).map((c) => c.id).filter(Boolean);
-          if (!cancelled) {
-            setChainIds(ids.length > 0 ? ids : undefined);
-            setResolvingChains(false);
+          try {
+            const data = await fetchMyChains(gatewayUrl, token);
+            const ids = (data.chains ?? []).map((c) => c.id).filter(Boolean);
+            if (!cancelled) {
+              setChainIds(ids.length > 0 ? ids : undefined);
+              if (ids.length === 0 && !isGuestOnlyRole(parsedRoles)) {
+                setAccessWarning(
+                  "No brand access for this account. Ask a manager to provision your staff profile in the database (inventory.staff_member)."
+                );
+              }
+            }
+          } catch (err) {
+            if (!cancelled) {
+              setChainIds(undefined);
+              if (err instanceof GatewayError && err.status === 403) {
+                setAccessWarning(
+                  err.message ||
+                    "Staff account not provisioned or disabled. Update inventory.staff_member with your JWT sub after first login."
+                );
+              }
+            }
+          } finally {
+            if (!cancelled) setResolvingChains(false);
           }
           return;
         }
@@ -137,11 +161,12 @@ function useAccessClaimsState(
         setResolvingChains(false);
       } catch {
         if (!cancelled) {
-          setRoles(null);
+          setRoles(undefined);
           setChainIds(undefined);
           setEnterpriseId(undefined);
           setActiveChainId(undefined);
           setResolvingChains(false);
+          setAccessWarning(null);
         }
       }
     })();
@@ -172,5 +197,6 @@ function useAccessClaimsState(
     isManager: hasManagerRole(roles ?? null),
     isGuestOnly: isGuestOnlyRole(roles),
     isMultiChain: (effectiveChainIds?.length ?? 0) > 1,
+    accessWarning,
   };
 }

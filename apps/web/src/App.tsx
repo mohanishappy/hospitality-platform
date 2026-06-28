@@ -26,7 +26,7 @@ type Props = {
 function ChainSite({ config, chainCode }: { config: AppConfig; chainCode: string }) {
   const { isAuthenticated } = useAuth0();
   const { ready } = useAuthReady();
-  const { can, isGuestOnly } = useAccessClaims();
+  const { can, isGuestOnly, accessWarning } = useAccessClaims();
   const [brandName, setBrandName] = useState(chainCode);
   const [defaultChainId, setDefaultChainId] = useState<string | undefined>();
 
@@ -74,13 +74,19 @@ function ChainSite({ config, chainCode }: { config: AppConfig; chainCode: string
           chainCode={chainCode}
         />
 
-        {showReservations && defaultChainId && (
+        {accessWarning && (
+          <section className="panel panel-wide">
+            <p className="error">{accessWarning}</p>
+          </section>
+        )}
+
+        {showReservations && (
           <ReservationsPanel
             gatewayUrl={config.gatewayUrl}
             audience={config.auth0Audience}
             guestMode={isGuestOnly}
             chainCode={chainCode}
-            defaultChainFilter={defaultChainId}
+            defaultChainFilter={defaultChainId ?? "all"}
           />
         )}
 

@@ -35,7 +35,7 @@ function EnterpriseSiteInner({
 }) {
   const { isAuthenticated } = useAuth0();
   const { ready } = useAuthReady();
-  const { can, isGuestOnly } = useAccessClaims();
+  const { can, isGuestOnly, accessWarning } = useAccessClaims();
 
   const showReservations =
     ready && isAuthenticated && can("reservations:read");
@@ -79,6 +79,12 @@ function EnterpriseSiteInner({
             </ul>
           )}
         </section>
+
+        {accessWarning && (
+          <section className="panel panel-wide">
+            <p className="error">{accessWarning}</p>
+          </section>
+        )}
 
         {showReservations && (
           <ReservationsPanel
