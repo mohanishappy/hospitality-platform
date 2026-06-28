@@ -9,6 +9,27 @@ import {
   type EnterpriseAdminTab,
 } from "../lib/tenantPath";
 
+function syncPathState(path: string): {
+  chainCode: string | null;
+  enterpriseCode: string | null;
+  adminRoute: ReturnType<typeof parseEnterpriseAdminFromPath>;
+} {
+  const adminRoute = parseEnterpriseAdminFromPath(path);
+  return {
+    chainCode: parseChainCodeFromPath(path),
+    adminRoute,
+    enterpriseCode: adminRoute ? null : parseEnterpriseCodeFromPath(path),
+  };
+}
+
+/** pushState + popstate so every useTenantPath() instance re-syncs from the URL. */
+function pushPath(next: string) {
+  if (window.location.pathname !== next) {
+    window.history.pushState({}, "", next);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }
+}
+
 export function useTenantPath(): {
   chainCode: string | null;
   enterpriseCode: string | null;
@@ -27,47 +48,31 @@ export function useTenantPath(): {
     parseEnterpriseAdminFromPath(window.location.pathname)
   );
 
+  const applyPath = useCallback((path: string) => {
+    const next = syncPathState(path);
+    setChainCode(next.chainCode);
+    setAdminRoute(next.adminRoute);
+    setEnterpriseCode(next.enterpriseCode);
+  }, []);
+
   useEffect(() => {
-    const sync = () => {
-      const path = window.location.pathname;
-      setChainCode(parseChainCodeFromPath(path));
-      setAdminRoute(parseEnterpriseAdminFromPath(path));
-      setEnterpriseCode(parseEnterpriseAdminFromPath(path) ? null : parseEnterpriseCodeFromPath(path));
-    };
+    const sync = () => applyPath(window.location.pathname);
     sync();
     window.addEventListener("popstate", sync);
     return () => window.removeEventListener("popstate", sync);
-  }, []);
+  }, [applyPath]);
 
   const navigateToChain = useCallback((code: string) => {
-    const next = chainPath(code);
-    if (window.location.pathname !== next) {
-      window.history.pushState({}, "", next);
-    }
-    setChainCode(parseChainCodeFromPath(next));
-    setEnterpriseCode(null);
-    setAdminRoute(null);
+    pushPath(chainPath(code));
   }, []);
 
   const navigateToEnterprise = useCallback((code: string) => {
-    const next = enterprisePath(code);
-    if (window.location.pathname !== next) {
-      window.history.pushState({}, "", next);
-    }
-    setEnterpriseCode(parseEnterpriseCodeFromPath(next));
-    setChainCode(null);
-    setAdminRoute(null);
+    pushPath(enterprisePath(code));
   }, []);
 
   const navigateToEnterpriseAdmin = useCallback(
     (code: string, tab: EnterpriseAdminTab = "staff") => {
-      const next = enterpriseAdminPath(code, tab);
-      if (window.location.pathname !== next) {
-        window.history.pushState({}, "", next);
-      }
-      setAdminRoute(parseEnterpriseAdminFromPath(next));
-      setEnterpriseCode(null);
-      setChainCode(null);
+      pushPath(enterpriseAdminPath(code, tab));
     },
     []
   );

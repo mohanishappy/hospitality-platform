@@ -27,7 +27,7 @@ async function loginAsManager(page: import("@playwright/test").Page) {
   });
 }
 
-/** Deep-link to admin tab (reliable vs in-app nav until SPA routing fix is deployed). */
+/** Navigate to admin tab (in-app nav uses pushState + popstate sync). */
 async function openAdminTab(
   page: import("@playwright/test").Page,
   tab: "staff" | "brands" | "properties" | "rates" | "availability"
@@ -96,6 +96,52 @@ test.describe("Enterprise admin portal", () => {
     ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Inventory blocks" })
+    ).toBeVisible();
+  });
+
+  test("admin nav switches tabs without refresh", async ({ page }) => {
+    const nav = page.getByRole("navigation", { name: "Enterprise admin" });
+
+    await expect(page).toHaveURL(new RegExp(`/e/${enterprise}/admin/?$`));
+    await expect(
+      page.getByRole("heading", { name: /invite staff|team/i }).first()
+    ).toBeVisible();
+
+    await nav.getByRole("link", { name: "Brands" }).click();
+    await expect(page).toHaveURL(new RegExp(`/e/${enterprise}/admin/brands`));
+    await expect(
+      page.getByRole("heading", { name: "Brands", exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /invite staff|team/i })
+    ).not.toBeVisible();
+
+    await nav.getByRole("link", { name: "Properties" }).click();
+    await expect(page).toHaveURL(
+      new RegExp(`/e/${enterprise}/admin/properties`)
+    );
+    await expect(
+      page.getByRole("heading", { name: "Properties" })
+    ).toBeVisible();
+
+    await nav.getByRole("link", { name: "Rates" }).click();
+    await expect(page).toHaveURL(new RegExp(`/e/${enterprise}/admin/rates`));
+    await expect(
+      page.getByRole("heading", { name: /rates & promotions/i })
+    ).toBeVisible();
+
+    await nav.getByRole("link", { name: "Availability" }).click();
+    await expect(page).toHaveURL(
+      new RegExp(`/e/${enterprise}/admin/availability`)
+    );
+    await expect(
+      page.getByRole("heading", { name: "Inventory blocks" })
+    ).toBeVisible();
+
+    await nav.getByRole("link", { name: "Staff" }).click();
+    await expect(page).toHaveURL(new RegExp(`/e/${enterprise}/admin/?$`));
+    await expect(
+      page.getByRole("heading", { name: /invite staff|team/i }).first()
     ).toBeVisible();
   });
 });
