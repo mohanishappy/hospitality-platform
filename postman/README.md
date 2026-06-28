@@ -162,7 +162,9 @@ Requires migrations **0014** (rate plans / promotions) and **0020** (BAR seed on
 
 Folder **01c — Admin catalog** — manager token, **`staff:admin`**. Set **`admin_chain_id`** (DEMO default: `00000000-0000-0000-0000-000000000001`) or run **GET My chains** first. Clear **`chain_code`** when calling enterprise-wide admin routes.
 
-Typical flow: **GET List hotels (admin)** → **POST Create hotel** → **POST Create room type** → verify in **GET Search stays** on that brand (after ~60s gateway cache).
+Typical flow: **POST Create brand** → **GET List hotels (admin)** → **POST Create hotel** → **POST Create room type** → **POST Create rate plan** + **PUT LOS tiers** / **POST Create promotion** → **POST Create block** → verify in **GET Search stays** on that brand (after ~60s gateway cache).
+
+Rates and blocks are also manageable in the Enterprise Admin Portal at **`/e/:code/admin/rates`** and **`/e/:code/admin/availability`**.
 
 ---
 

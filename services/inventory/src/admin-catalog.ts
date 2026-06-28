@@ -199,3 +199,133 @@ export function parseOptionalTime(raw: unknown): string | null | undefined {
   if (!/^\d{2}:\d{2}(:\d{2})?$/.test(t)) return null;
   return t.length === 5 ? `${t}:00` : t;
 }
+
+export function parseCatalogCode(raw: unknown): string | null {
+  return parseHotelCode(raw);
+}
+
+export function parseOptionalDate(raw: unknown): string | null | undefined {
+  if (raw === undefined) return undefined;
+  if (raw === null) return null;
+  if (typeof raw !== "string") return null;
+  const d = raw.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return null;
+  return d;
+}
+
+export async function validateHotelInChain(
+  supa: ReturnType<typeof supaClient>,
+  chainId: string,
+  hotelId: string
+): Promise<boolean> {
+  const { data } = await supa
+    .schema("inventory")
+    .from("hotel")
+    .select("id")
+    .eq("id", hotelId)
+    .eq("chain_id", chainId)
+    .maybeSingle();
+  return !!data;
+}
+
+export async function validateRoomTypeInChain(
+  supa: ReturnType<typeof supaClient>,
+  chainId: string,
+  roomTypeId: string,
+  hotelId?: string | null
+): Promise<{ ok: true; hotel_id: string } | { ok: false }> {
+  const { data } = await supa
+    .schema("inventory")
+    .from("room_type")
+    .select("id,hotel_id,chain_id")
+    .eq("id", roomTypeId)
+    .eq("chain_id", chainId)
+    .maybeSingle();
+  if (!data) return { ok: false };
+  const row = data as { hotel_id: string };
+  if (hotelId && row.hotel_id !== hotelId) return { ok: false };
+  return { ok: true, hotel_id: row.hotel_id };
+}
+
+export async function loadRatePlanInEnterprise(
+  supa: ReturnType<typeof supaClient>,
+  enterpriseId: string,
+  ratePlanId: string
+) {
+  const { data, error } = await supa
+    .schema("inventory")
+    .from("rate_plan")
+    .select("id,chain_id,hotel_id,room_type_id,code,label,priority,valid_from,valid_to,nightly_rate_cents,created_at,chain:chain_id(enterprise_id)")
+    .eq("id", ratePlanId)
+    .maybeSingle();
+  if (error) {
+    return {
+      ok: false as const,
+      response: problem(500, "Database error", formatPostgrestError(error)),
+    };
+  }
+  const row = data as {
+    chain: { enterprise_id: string } | null;
+  } | null;
+  if (!data || row?.chain?.enterprise_id !== enterpriseId) {
+    return {
+      ok: false as const,
+      response: problem(404, "Not Found", "Rate plan not found"),
+    };
+  }
+  return { ok: true as const, ratePlan: data };
+}
+
+export async function loadPromotionInEnterprise(
+  supa: ReturnType<typeof supaClient>,
+  enterpriseId: string,
+  promotionId: string
+) {
+  const { data, error } = await supa
+    .schema("inventory")
+    .from("promotion")
+    .select("id,chain_id,code,label,active,discount_percent_bps,discount_amount_cents,min_los,valid_from,valid_to,blackout_dates,created_at,chain:chain_id(enterprise_id)")
+    .eq("id", promotionId)
+    .maybeSingle();
+  if (error) {
+    return {
+      ok: false as const,
+      response: problem(500, "Database error", formatPostgrestError(error)),
+    };
+  }
+  const row = data as { chain: { enterprise_id: string } | null } | null;
+  if (!data || row?.chain?.enterprise_id !== enterpriseId) {
+    return {
+      ok: false as const,
+      response: problem(404, "Not Found", "Promotion not found"),
+    };
+  }
+  return { ok: true as const, promotion: data };
+}
+
+export async function loadBlockInEnterprise(
+  supa: ReturnType<typeof supaClient>,
+  enterpriseId: string,
+  blockId: string
+) {
+  const { data, error } = await supa
+    .schema("inventory")
+    .from("inventory_block")
+    .select("id,chain_id,hotel_id,room_type_id,units_reduced,start_date,end_date,label,chain:chain_id(enterprise_id)")
+    .eq("id", blockId)
+    .maybeSingle();
+  if (error) {
+    return {
+      ok: false as const,
+      response: problem(500, "Database error", formatPostgrestError(error)),
+    };
+  }
+  const row = data as { chain: { enterprise_id: string } | null } | null;
+  if (!data || row?.chain?.enterprise_id !== enterpriseId) {
+    return {
+      ok: false as const,
+      response: problem(404, "Not Found", "Block not found"),
+    };
+  }
+  return { ok: true as const, block: data };
+}

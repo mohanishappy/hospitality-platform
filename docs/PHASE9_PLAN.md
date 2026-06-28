@@ -135,6 +135,8 @@ Single shell at **`/e/:code/admin`** with **Staff** and **Brands** sections (mer
 
 UI ships in **9D** shell (Brands tab). Platform Portal does **not** create brands.
 
+**Status:** **Shipped** — API + Brands tab create/edit (with **10C** UI batch).
+
 ---
 
 ## Phase 9G — Lifecycle polish (≈1–2 days)

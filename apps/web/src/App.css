@@ -165,6 +165,35 @@
   font-weight: 600;
 }
 
+.admin-subnav {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 1rem;
+}
+
+.admin-subnav-btn {
+  padding: 0.4rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  color: #64748b;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.admin-subnav-btn:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.admin-subnav-btn.active {
+  border-color: #2f6fed;
+  background: #eff6ff;
+  color: #2f6fed;
+  font-weight: 600;
+}
+
 @media (prefers-color-scheme: dark) {
   .admin-nav {
     border-bottom-color: #273044;
@@ -176,6 +205,22 @@
 
   .admin-nav-link.active {
     background: #172554;
+  }
+
+  .admin-subnav-btn {
+    border-color: #273044;
+    background: #1e293b;
+    color: #94a3b8;
+  }
+
+  .admin-subnav-btn:hover {
+    background: #334155;
+  }
+
+  .admin-subnav-btn.active {
+    border-color: #2f6fed;
+    background: #172554;
+    color: #93c5fd;
   }
 }
 
@@ -276,6 +321,90 @@
   display: flex;
   gap: 0.5rem;
   margin-top: 0.5rem;
+}
+
+.subsection-title {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.admin-inline-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-width: 20rem;
+  margin-top: 0.75rem;
+}
+
+.admin-form-inline {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.admin-pick-list {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.admin-pick-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.admin-pick-item:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.admin-pick-item.active {
+  border-color: #2f6fed;
+  background: #eff6ff;
+}
+
+.secondary-link {
+  font-size: 0.9rem;
+  color: #2f6fed;
+  text-decoration: none;
+  align-self: center;
+}
+
+.secondary-link:hover {
+  text-decoration: underline;
+}
+
+@media (prefers-color-scheme: dark) {
+  .admin-form-inline {
+    border-top-color: #273044;
+  }
+
+  .admin-pick-item {
+    border-color: #273044;
+    background: #1e293b;
+  }
+
+  .admin-pick-item:hover {
+    background: #334155;
+  }
+
+  .admin-pick-item.active {
+    border-color: #2f6fed;
+    background: #172554;
+  }
 }
 
 .section-title {

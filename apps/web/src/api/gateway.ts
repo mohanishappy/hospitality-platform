@@ -171,6 +171,7 @@ export type ChainSummary = {
   code: string;
   name: string;
   enterprise_id?: string;
+  default_currency?: string;
 };
 
 export type EnterpriseSummary = {
@@ -472,6 +473,465 @@ export function replaceStaffChainGrants(
       method: "PUT",
       headers: adminAuthHeaders(accessToken),
       body: JSON.stringify({ chain_ids: chainIds }),
+    }
+  );
+}
+
+export type AdminHotel = {
+  id: string;
+  chain_id: string;
+  name: string;
+  code: string;
+  created_at: string;
+  booking_min_los?: number | null;
+  booking_max_los?: number | null;
+  booking_closed_arrival_dow?: number[] | null;
+  booking_closed_departure_dow?: number[] | null;
+  booking_timezone?: string | null;
+  booking_same_day_cutoff_time?: string | null;
+};
+
+export type AdminRoomType = {
+  id: string;
+  hotel_id: string;
+  chain_id: string;
+  name: string;
+  code: string;
+  capacity: number;
+  created_at: string;
+  units_total: number;
+  base_rate_cents: number | null;
+  tax_rate_bps: number;
+  fee_fixed_cents: number;
+  overbooking_allowance: number;
+};
+
+export function createAdminChain(
+  gatewayUrl: string,
+  accessToken: string,
+  body: { code: string; name: string; default_currency?: string }
+) {
+  return gatewayFetch<{ chain: ChainSummary }>(
+    gatewayUrl,
+    "/v1/inventory/admin/chains",
+    {
+      method: "POST",
+      headers: adminAuthHeaders(accessToken),
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export function patchAdminChain(
+  gatewayUrl: string,
+  accessToken: string,
+  chainId: string,
+  body: { code?: string; name?: string; default_currency?: string }
+) {
+  return gatewayFetch<{ chain: ChainSummary }>(
+    gatewayUrl,
+    `/v1/inventory/admin/chains/${encodeURIComponent(chainId)}`,
+    {
+      method: "PATCH",
+      headers: adminAuthHeaders(accessToken),
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export function listAdminHotels(
+  gatewayUrl: string,
+  accessToken: string,
+  chainId: string
+) {
+  return gatewayFetch<{ chain_id: string; hotels: AdminHotel[] }>(
+    gatewayUrl,
+    `/v1/inventory/admin/chains/${encodeURIComponent(chainId)}/hotels`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+}
+
+export function createAdminHotel(
+  gatewayUrl: string,
+  accessToken: string,
+  chainId: string,
+  body: { code: string; name: string }
+) {
+  return gatewayFetch<{ hotel: AdminHotel }>(
+    gatewayUrl,
+    `/v1/inventory/admin/chains/${encodeURIComponent(chainId)}/hotels`,
+    {
+      method: "POST",
+      headers: adminAuthHeaders(accessToken),
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export function getAdminHotel(
+  gatewayUrl: string,
+  accessToken: string,
+  hotelId: string
+) {
+  return gatewayFetch<{ hotel: AdminHotel }>(
+    gatewayUrl,
+    `/v1/inventory/admin/hotels/${encodeURIComponent(hotelId)}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+}
+
+export function patchAdminHotel(
+  gatewayUrl: string,
+  accessToken: string,
+  hotelId: string,
+  body: Partial<
+    Pick<
+      AdminHotel,
+      | "name"
+      | "code"
+      | "booking_min_los"
+      | "booking_max_los"
+      | "booking_closed_arrival_dow"
+      | "booking_closed_departure_dow"
+      | "booking_timezone"
+      | "booking_same_day_cutoff_time"
+    >
+  >
+) {
+  return gatewayFetch<{ hotel: AdminHotel }>(
+    gatewayUrl,
+    `/v1/inventory/admin/hotels/${encodeURIComponent(hotelId)}`,
+    {
+      method: "PATCH",
+      headers: adminAuthHeaders(accessToken),
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export function listAdminRoomTypes(
+  gatewayUrl: string,
+  accessToken: string,
+  hotelId: string
+) {
+  return gatewayFetch<{ hotel_id: string; room_types: AdminRoomType[] }>(
+    gatewayUrl,
+    `/v1/inventory/admin/hotels/${encodeURIComponent(hotelId)}/room-types`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+}
+
+export function createAdminRoomType(
+  gatewayUrl: string,
+  accessToken: string,
+  hotelId: string,
+  body: {
+    code: string;
+    name: string;
+    capacity?: number;
+    units_total?: number;
+    overbooking_allowance?: number;
+    base_rate_cents?: number;
+    tax_rate_bps?: number;
+    fee_fixed_cents?: number;
+  }
+) {
+  return gatewayFetch<{ room_type: AdminRoomType }>(
+    gatewayUrl,
+    `/v1/inventory/admin/hotels/${encodeURIComponent(hotelId)}/room-types`,
+    {
+      method: "POST",
+      headers: adminAuthHeaders(accessToken),
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export function patchAdminRoomType(
+  gatewayUrl: string,
+  accessToken: string,
+  roomTypeId: string,
+  body: Partial<
+    Pick<
+      AdminRoomType,
+      | "name"
+      | "code"
+      | "capacity"
+      | "units_total"
+      | "overbooking_allowance"
+      | "base_rate_cents"
+      | "tax_rate_bps"
+      | "fee_fixed_cents"
+    >
+  >
+) {
+  return gatewayFetch<{ room_type: AdminRoomType }>(
+    gatewayUrl,
+    `/v1/inventory/admin/room-types/${encodeURIComponent(roomTypeId)}`,
+    {
+      method: "PATCH",
+      headers: adminAuthHeaders(accessToken),
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export type AdminRatePlan = {
+  id: string;
+  chain_id: string;
+  hotel_id: string | null;
+  room_type_id: string | null;
+  code: string;
+  label: string | null;
+  priority: number;
+  valid_from: string;
+  valid_to: string | null;
+  nightly_rate_cents: number | null;
+  created_at: string;
+};
+
+export type AdminLosTier = {
+  id: string;
+  rate_plan_id: string;
+  min_nights: number;
+  max_nights: number | null;
+  nightly_rate_cents: number;
+};
+
+export type AdminPromotion = {
+  id: string;
+  chain_id: string;
+  code: string;
+  label: string | null;
+  active: boolean;
+  discount_percent_bps: number;
+  discount_amount_cents: number;
+  min_los: number;
+  valid_from: string;
+  valid_to: string | null;
+  blackout_dates: string[];
+  created_at: string;
+};
+
+export type AdminInventoryBlock = {
+  id: string;
+  chain_id: string;
+  hotel_id: string;
+  room_type_id: string;
+  units_reduced: number;
+  start_date: string;
+  end_date: string;
+  label: string | null;
+};
+
+export function listAdminRatePlans(
+  gatewayUrl: string,
+  accessToken: string,
+  chainId: string
+) {
+  return gatewayFetch<{ chain_id: string; rate_plans: AdminRatePlan[] }>(
+    gatewayUrl,
+    `/v1/inventory/admin/chains/${encodeURIComponent(chainId)}/rate-plans`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+}
+
+export function createAdminRatePlan(
+  gatewayUrl: string,
+  accessToken: string,
+  chainId: string,
+  body: {
+    code: string;
+    label?: string;
+    priority?: number;
+    valid_from: string;
+    valid_to?: string | null;
+    nightly_rate_cents?: number | null;
+    hotel_id?: string | null;
+    room_type_id?: string | null;
+  }
+) {
+  return gatewayFetch<{ rate_plan: AdminRatePlan }>(
+    gatewayUrl,
+    `/v1/inventory/admin/chains/${encodeURIComponent(chainId)}/rate-plans`,
+    {
+      method: "POST",
+      headers: adminAuthHeaders(accessToken),
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export function getAdminRatePlan(
+  gatewayUrl: string,
+  accessToken: string,
+  ratePlanId: string
+) {
+  return gatewayFetch<{ rate_plan: AdminRatePlan; los_tiers: AdminLosTier[] }>(
+    gatewayUrl,
+    `/v1/inventory/admin/rate-plans/${encodeURIComponent(ratePlanId)}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+}
+
+export function patchAdminRatePlan(
+  gatewayUrl: string,
+  accessToken: string,
+  ratePlanId: string,
+  body: Partial<{
+    code: string;
+    label: string | null;
+    priority: number;
+    valid_from: string;
+    valid_to: string | null;
+    nightly_rate_cents: number | null;
+    hotel_id: string | null;
+    room_type_id: string | null;
+  }>
+) {
+  return gatewayFetch<{ rate_plan: AdminRatePlan }>(
+    gatewayUrl,
+    `/v1/inventory/admin/rate-plans/${encodeURIComponent(ratePlanId)}`,
+    {
+      method: "PATCH",
+      headers: adminAuthHeaders(accessToken),
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export function putAdminRatePlanLosTiers(
+  gatewayUrl: string,
+  accessToken: string,
+  ratePlanId: string,
+  tiers: {
+    min_nights: number;
+    max_nights?: number | null;
+    nightly_rate_cents: number;
+  }[]
+) {
+  return gatewayFetch<{ rate_plan_id: string; los_tiers: AdminLosTier[] }>(
+    gatewayUrl,
+    `/v1/inventory/admin/rate-plans/${encodeURIComponent(ratePlanId)}/los-tiers`,
+    {
+      method: "PUT",
+      headers: adminAuthHeaders(accessToken),
+      body: JSON.stringify({ tiers }),
+    }
+  );
+}
+
+export function listAdminPromotions(
+  gatewayUrl: string,
+  accessToken: string,
+  chainId: string
+) {
+  return gatewayFetch<{ chain_id: string; promotions: AdminPromotion[] }>(
+    gatewayUrl,
+    `/v1/inventory/admin/chains/${encodeURIComponent(chainId)}/promotions`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+}
+
+export function createAdminPromotion(
+  gatewayUrl: string,
+  accessToken: string,
+  chainId: string,
+  body: {
+    code: string;
+    label?: string;
+    active?: boolean;
+    discount_percent_bps?: number;
+    discount_amount_cents?: number;
+    min_los?: number;
+    valid_from: string;
+    valid_to?: string | null;
+    blackout_dates?: string[];
+  }
+) {
+  return gatewayFetch<{ promotion: AdminPromotion }>(
+    gatewayUrl,
+    `/v1/inventory/admin/chains/${encodeURIComponent(chainId)}/promotions`,
+    {
+      method: "POST",
+      headers: adminAuthHeaders(accessToken),
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export function patchAdminPromotion(
+  gatewayUrl: string,
+  accessToken: string,
+  promotionId: string,
+  body: Partial<{
+    code: string;
+    label: string | null;
+    active: boolean;
+    discount_percent_bps: number;
+    discount_amount_cents: number;
+    min_los: number;
+    valid_from: string;
+    valid_to: string | null;
+    blackout_dates: string[];
+  }>
+) {
+  return gatewayFetch<{ promotion: AdminPromotion }>(
+    gatewayUrl,
+    `/v1/inventory/admin/promotions/${encodeURIComponent(promotionId)}`,
+    {
+      method: "PATCH",
+      headers: adminAuthHeaders(accessToken),
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export function listAdminBlocks(
+  gatewayUrl: string,
+  accessToken: string,
+  roomTypeId: string
+) {
+  return gatewayFetch<{ room_type_id: string; blocks: AdminInventoryBlock[] }>(
+    gatewayUrl,
+    `/v1/inventory/admin/room-types/${encodeURIComponent(roomTypeId)}/blocks`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+}
+
+export function createAdminBlock(
+  gatewayUrl: string,
+  accessToken: string,
+  roomTypeId: string,
+  body: {
+    start_date: string;
+    end_date: string;
+    units_reduced: number;
+    label?: string;
+  }
+) {
+  return gatewayFetch<{ block: AdminInventoryBlock }>(
+    gatewayUrl,
+    `/v1/inventory/admin/room-types/${encodeURIComponent(roomTypeId)}/blocks`,
+    {
+      method: "POST",
+      headers: adminAuthHeaders(accessToken),
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export function deleteAdminBlock(
+  gatewayUrl: string,
+  accessToken: string,
+  blockId: string
+) {
+  return gatewayFetch<void>(
+    gatewayUrl,
+    `/v1/inventory/admin/blocks/${encodeURIComponent(blockId)}`,
+    {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${accessToken}` },
     }
   );
 }

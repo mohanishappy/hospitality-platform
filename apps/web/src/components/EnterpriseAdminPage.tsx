@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import {
   fetchEnterpriseByCode,
@@ -19,7 +19,10 @@ import {
   type EnterpriseAdminTab,
 } from "../lib/tenantPath";
 import { AuthBar } from "./AuthBar";
+import { AdminAvailabilityTab } from "./admin/AdminAvailabilityTab";
 import { AdminBrandsTab } from "./admin/AdminBrandsTab";
+import { AdminPropertiesTab } from "./admin/AdminPropertiesTab";
+import { AdminRatesTab } from "./admin/AdminRatesTab";
 import { AdminStaffTab } from "./admin/AdminStaffTab";
 import { PanelErrorBoundary } from "./ErrorBoundary";
 import { SiteFooter } from "./SiteFooter";
@@ -34,6 +37,8 @@ const TABS: { id: EnterpriseAdminTab; label: string }[] = [
   { id: "staff", label: "Staff" },
   { id: "brands", label: "Brands" },
   { id: "properties", label: "Properties" },
+  { id: "rates", label: "Rates" },
+  { id: "availability", label: "Availability" },
 ];
 
 function AdminShell({
@@ -42,7 +47,12 @@ function AdminShell({
   tab,
   enterpriseName,
   chains,
-}: Props & { enterpriseName: string; chains: ChainSummary[] }) {
+  reloadChains,
+}: Props & {
+  enterpriseName: string;
+  chains: ChainSummary[];
+  reloadChains: () => void;
+}) {
   const { isAuthenticated, isLoading: authLoading, user } = useAuth0();
   const { ready } = useAuthReady();
   const {
@@ -147,16 +157,42 @@ function AdminShell({
                 />
               </PanelErrorBoundary>
             )}
-            {tab === "brands" && <AdminBrandsTab chains={chains} />}
+            {tab === "brands" && (
+              <PanelErrorBoundary title="Brands admin">
+                <AdminBrandsTab
+                  gatewayUrl={config.gatewayUrl}
+                  audience={config.auth0Audience}
+                  chains={chains}
+                  onChainsChange={reloadChains}
+                />
+              </PanelErrorBoundary>
+            )}
             {tab === "properties" && (
-              <section className="panel panel-wide">
-                <h2 className="section-title">Properties</h2>
-                <p className="muted">
-                  Hotel and room type management UI (Phase 10C) is next. Use
-                  Postman folder <strong>01c — Admin catalog</strong> until
-                  then.
-                </p>
-              </section>
+              <PanelErrorBoundary title="Properties admin">
+                <AdminPropertiesTab
+                  gatewayUrl={config.gatewayUrl}
+                  audience={config.auth0Audience}
+                  chains={chains}
+                />
+              </PanelErrorBoundary>
+            )}
+            {tab === "rates" && (
+              <PanelErrorBoundary title="Rates admin">
+                <AdminRatesTab
+                  gatewayUrl={config.gatewayUrl}
+                  audience={config.auth0Audience}
+                  chains={chains}
+                />
+              </PanelErrorBoundary>
+            )}
+            {tab === "availability" && (
+              <PanelErrorBoundary title="Availability admin">
+                <AdminAvailabilityTab
+                  gatewayUrl={config.gatewayUrl}
+                  audience={config.auth0Audience}
+                  chains={chains}
+                />
+              </PanelErrorBoundary>
             )}
           </>
         )}
@@ -170,6 +206,12 @@ function AdminShell({
 export function EnterpriseAdminPage({ config, enterpriseCode, tab }: Props) {
   const [enterpriseName, setEnterpriseName] = useState(enterpriseCode);
   const [chains, setChains] = useState<ChainSummary[]>([]);
+
+  const reloadChains = useCallback(() => {
+    void fetchEnterpriseChains(config.gatewayUrl, enterpriseCode)
+      .then((data) => setChains(data.chains ?? []))
+      .catch(() => setChains([]));
+  }, [config.gatewayUrl, enterpriseCode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -205,6 +247,7 @@ export function EnterpriseAdminPage({ config, enterpriseCode, tab }: Props) {
         tab={tab}
         enterpriseName={enterpriseName}
         chains={chains}
+        reloadChains={reloadChains}
       />
     </AccessClaimsProvider>
   );

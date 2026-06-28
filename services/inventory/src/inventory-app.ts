@@ -21,6 +21,24 @@ import {
   putAdminStaffChains,
 } from "./handlers/admin-staff";
 import {
+  createAdminBlock,
+  deleteAdminBlock,
+  listAdminBlocks,
+} from "./handlers/admin-blocks";
+import { createAdminChain, patchAdminChain } from "./handlers/admin-chains";
+import {
+  createAdminPromotion,
+  listAdminPromotions,
+  patchAdminPromotion,
+} from "./handlers/admin-promotions";
+import {
+  createAdminRatePlan,
+  getAdminRatePlan,
+  listAdminRatePlans,
+  patchAdminRatePlan,
+  putAdminRatePlanLosTiers,
+} from "./handlers/admin-rate-plans";
+import {
   createAdminHotel,
   getAdminHotel,
   listAdminHotels,
@@ -51,6 +69,12 @@ export function inventoryApp() {
   r.post("/admin/staff/invite", createStaffInvite);
   r.patch("/admin/staff/:id", patchAdminStaff);
   r.put("/admin/staff/:id/chains", putAdminStaffChains);
+  r.post("/admin/chains", createAdminChain);
+  r.patch("/admin/chains/:chainId", patchAdminChain);
+  r.get("/admin/chains/:chainId/rate-plans", listAdminRatePlans);
+  r.post("/admin/chains/:chainId/rate-plans", createAdminRatePlan);
+  r.get("/admin/chains/:chainId/promotions", listAdminPromotions);
+  r.post("/admin/chains/:chainId/promotions", createAdminPromotion);
   r.get("/admin/chains/:chainId/hotels", listAdminHotels);
   r.post("/admin/chains/:chainId/hotels", createAdminHotel);
   r.get("/admin/hotels/:hotelId/room-types", listAdminRoomTypes);
@@ -59,6 +83,13 @@ export function inventoryApp() {
   r.patch("/admin/hotels/:hotelId", patchAdminHotel);
   r.get("/admin/room-types/:roomTypeId", getAdminRoomType);
   r.patch("/admin/room-types/:roomTypeId", patchAdminRoomType);
+  r.get("/admin/room-types/:roomTypeId/blocks", listAdminBlocks);
+  r.post("/admin/room-types/:roomTypeId/blocks", createAdminBlock);
+  r.get("/admin/rate-plans/:ratePlanId", getAdminRatePlan);
+  r.patch("/admin/rate-plans/:ratePlanId", patchAdminRatePlan);
+  r.put("/admin/rate-plans/:ratePlanId/los-tiers", putAdminRatePlanLosTiers);
+  r.patch("/admin/promotions/:promotionId", patchAdminPromotion);
+  r.delete("/admin/blocks/:blockId", deleteAdminBlock);
   r.get("/chains", listChains);
   r.get("/chains/:code", getChainByCode);
   r.get("/search", searchStays);

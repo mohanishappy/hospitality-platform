@@ -41,9 +41,9 @@ Brand booking site  (/c/:code)
 |-------|--------|----------|------------|
 | **10A** | Guest booking quick wins | 2–3 days | — |
 | **10B** | Demo pricing seed (migration **0020**) | 1 day | — |
-| **10C** | Catalog admin API + Properties UI | 4–5 days | 9D, 9F |
-| **10D** | Rate & promo admin API + Rates UI | 4–5 days | 10C |
-| **10E** | Blocks + policies UI | 3–4 days | 10C |
+| **10C** | Catalog admin API + Properties UI | **API + UI shipped**; OpenAPI pending |
+| **10D** | Rate & promo admin API + Rates UI | **API + UI shipped**; OpenAPI pending | 10C |
+| **10E** | Blocks + policies UI | **Blocks API + UI shipped**; hotel policies in Properties tab | 10C |
 | **10F** | Soft holds in checkout + polish | 2–3 days | 10A |
 
 ---
@@ -214,8 +214,10 @@ Block reduces calendar remaining units; min LOS enforced in search.
 - [x] Gateway + route-scope for `/admin/chains|hotels|room-types`
 - [x] Postman **01c — Admin catalog**
 - [ ] OpenAPI schemas for catalog routes
-- [ ] SPA: Properties tab UI (**10C** — shell tab + placeholder in **9D**)
+- [x] SPA: Properties tab UI (**10C**)
 - [x] Vitest: gateway permission tests for catalog routes
+
+**9F (Brands admin API + UI):** shipped with **10C** UI — `POST/PATCH /admin/chains`, Brands tab create/edit.
 
 ---
 

@@ -27,7 +27,7 @@ Aligned with [`REQUIREMENTS.md`](REQUIREMENTS.md) **§2** backlog and [`IMPLEMEN
 | FR-Z3 | Enterprise + multi-brand | Migration **0017**: **`inventory.enterprise`**, chains linked by **`enterprise_id`**; gateway **`x-chain-ids`**; optional **`chain_id`** list filter; **`GET /v1/inventory/me/chains`**. See [`docs/AUTHORIZATION.md`](AUTHORIZATION.md). |
 | FR-Z4 | DB staff brand grants + admin API | Migration **0018**; staff CRUD **shipped**; invite + DB-driven claims + Enterprise Admin Portal **9B–9D**. |
 | FR-Z5 | Platform Portal enterprise bootstrap | Planned **9E**. |
-| FR-Z6 | Manager-created brands | Planned **9F**. |
+| FR-Z6 | Manager-created brands | **9F shipped** — `POST/PATCH /admin/chains` + Brands tab UI |
 | FR-O2 | Metrics / structured logs | Gateway **`withRequestMetrics`**: JSON log per request; **Workers Analytics Engine** binding **`ANALYTICS`** (**7D**). |
 | FR-O3 | Readiness | **`GET /health/ready`**: JWKS + optional Supabase PostgREST ping (**7E**). |
 | FR-D1 | CI / contract tests | Vitest; OpenAPI guard; public + golden-path smoke; **Newman** optional (**7G**). |
@@ -37,6 +37,6 @@ Aligned with [`REQUIREMENTS.md`](REQUIREMENTS.md) **§2** backlog and [`IMPLEMEN
 
 **Migrations:** apply through [`0019_staff_invite_db_roles.sql`](../supabase/migrations/0019_staff_invite_db_roles.sql). **`0020`** (demo pricing seed) — Phase **10B**.
 
-**Phase 10:** see [`PHASE10_PLAN.md`](PHASE10_PLAN.md). **10A** — guest promo/hotel filter in booking SPA; **10B** — migration **0020** BAR seed.
+**Phase 10:** see [`PHASE10_PLAN.md`](PHASE10_PLAN.md). **10A–10E** shipped (guest promo, BAR seed, catalog admin, Rates + Availability UI). **10F** soft holds in checkout next.
 
 **Demo seed (0014 + 0020):** chain **`DEMO`** — **`LOS3`** (3+ nights @ **9000** cents/night on **DEMO-H1** `STD-QN`); **`SAVE5`** (500 bps off); all brands have **`base_rate_cents`** after **0020**.

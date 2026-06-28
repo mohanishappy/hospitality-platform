@@ -3,7 +3,12 @@ const ENTERPRISE_PATH_RE = /^\/e\/([A-Za-z0-9_-]+)\/?$/;
 const ENTERPRISE_ADMIN_RE = /^\/e\/([A-Za-z0-9_-]+)\/admin(?:\/([a-z]+))?\/?$/;
 const INVITE_ACCEPT_PATH = /^\/invite\/accept\/?$/;
 
-export type EnterpriseAdminTab = "staff" | "brands" | "properties";
+export type EnterpriseAdminTab =
+  | "staff"
+  | "brands"
+  | "properties"
+  | "rates"
+  | "availability";
 
 /** Parse tenant code from `/c/:chainCode` (case preserved for display; API uses uppercase). */
 export function parseChainCodeFromPath(pathname: string): string | null {
@@ -27,6 +32,8 @@ export function parseEnterpriseAdminFromPath(pathname: string): {
   let tab: EnterpriseAdminTab = "staff";
   if (tabRaw === "brands") tab = "brands";
   else if (tabRaw === "properties") tab = "properties";
+  else if (tabRaw === "rates") tab = "rates";
+  else if (tabRaw === "availability") tab = "availability";
   return { enterpriseCode: match[1], tab };
 }
 

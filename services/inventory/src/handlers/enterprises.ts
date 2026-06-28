@@ -68,7 +68,7 @@ export async function listEnterpriseChains(c: Context<{ Bindings: Env }>) {
   const { data, error } = await supa
     .schema("inventory")
     .from("chain")
-    .select("id,code,name,enterprise_id")
+    .select("id,code,name,enterprise_id,default_currency")
     .eq("enterprise_id", enterprise.id)
     .order("code");
   if (error) {
@@ -101,7 +101,7 @@ export async function listEnterpriseChainsById(c: Context<{ Bindings: Env }>) {
   const { data, error } = await supa
     .schema("inventory")
     .from("chain")
-    .select("id,code,name,enterprise_id")
+    .select("id,code,name,enterprise_id,default_currency")
     .eq("enterprise_id", enterprise.id)
     .order("code");
   if (error) {

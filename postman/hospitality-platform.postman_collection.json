@@ -634,6 +634,44 @@
       },
       "item": [
         {
+          "name": "POST Create brand (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"ADM-BR\",\n  \"name\": \"Admin Test Brand\",\n  \"default_currency\": \"USD\"\n}"
+            },
+            "url": "{{baseUrl}}/v1/inventory/admin/chains",
+            "description": "**Phase 9F:** Create brand in token enterprise. Requires **manager** + **`staff:admin`**. Change **`code`** if **409**."
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH Brand (admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Demo Brand Updated\"\n}"
+            },
+            "url": "{{baseUrl}}/v1/inventory/admin/chains/{{admin_chain_id}}",
+            "description": "Partial update: **`name`**, **`code`**, **`default_currency`**."
+          },
+          "response": []
+        },
+        {
           "name": "GET List hotels (admin)",
           "request": {
             "method": "GET",
@@ -780,9 +818,125 @@
             "description": "Update BAR, units, tax, fees, or display fields. Use **`admin_room_type_id`** or **`room_type_id`**."
           },
           "response": []
+        },
+        {
+          "name": "GET List rate plans (admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/inventory/admin/chains/{{admin_chain_id}}/rate-plans",
+            "description": "**Phase 10D:** List rate plans for brand **`admin_chain_id`**."
+          },
+          "response": []
+        },
+        {
+          "name": "POST Create rate plan (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"LOS3\",\n  \"label\": \"3+ nights\",\n  \"valid_from\": \"2020-01-01\",\n  \"priority\": 5\n}"
+            },
+            "url": "{{baseUrl}}/v1/inventory/admin/chains/{{admin_chain_id}}/rate-plans",
+            "description": "Create rate plan. Follow with **PUT LOS tiers** when using tiered pricing."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT Rate plan LOS tiers (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tiers\": [\n    {\n      \"min_nights\": 3,\n      \"nightly_rate_cents\": 9000\n    }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/v1/inventory/admin/rate-plans/{{admin_rate_plan_id}}/los-tiers",
+            "description": "Replace LOS tiers for a plan. Set **`admin_rate_plan_id`** from create response."
+          },
+          "response": []
+        },
+        {
+          "name": "GET List promotions (admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/inventory/admin/chains/{{admin_chain_id}}/promotions",
+            "description": "**Phase 10D:** List promotions for brand."
+          },
+          "response": []
+        },
+        {
+          "name": "POST Create promotion (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"SAVE5\",\n  \"label\": \"5% off\",\n  \"discount_percent_bps\": 500,\n  \"valid_from\": \"2020-01-01\"\n}"
+            },
+            "url": "{{baseUrl}}/v1/inventory/admin/chains/{{admin_chain_id}}/promotions",
+            "description": "Create promo. Test on guest search with **`promotion_code`**."
+          },
+          "response": []
+        },
+        {
+          "name": "GET List blocks (admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/inventory/admin/room-types/{{admin_room_type_id}}/blocks",
+            "description": "**Phase 10E:** Inventory blocks for room type."
+          },
+          "response": []
+        },
+        {
+          "name": "POST Create block (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"start_date\": \"2026-07-01\",\n  \"end_date\": \"2026-07-05\",\n  \"units_reduced\": 1,\n  \"label\": \"Maintenance\"\n}"
+            },
+            "url": "{{baseUrl}}/v1/inventory/admin/room-types/{{admin_room_type_id}}/blocks",
+            "description": "Reduce sellable units on **[start_date, end_date)** nights."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE Block (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/v1/inventory/admin/blocks/{{admin_block_id}}",
+            "description": "Remove inventory block. Set **`admin_block_id`** from create response."
+          },
+          "response": []
         }
       ],
-      "description": "**Phase 10C:** Manager catalog CRUD (**FR-I8**, **FR-I9**). Token needs **manager** role. Target brand via **`admin_chain_id`**; hotel/room ids from create responses or **01 — Inventory** list calls."
+      "description": "**Phase 10C–10E:** Manager catalog, rates, promos, and blocks. Token needs **manager** + **`staff:admin`**. Target brand via **`admin_chain_id`**; ids from create responses or **01 — Inventory** list calls."
     },
     {
       "name": "02 — Reservations",
