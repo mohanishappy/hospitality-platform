@@ -10,3 +10,6 @@ service = "hospitality-inventory"
 [[services]]
 binding = "RESERVATIONS"
 service = "hospitality-reservations"
+
+[[analytics_engine_datasets]]
+binding = "ANALYTICS"

@@ -1,6 +1,6 @@
 # Feature requirement status (tracker)
 
-Aligned with [`REQUIREMENTS.md`](REQUIREMENTS.md) **§2** backlog and [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) phases 0–7 (batch 1).
+Aligned with [`REQUIREMENTS.md`](REQUIREMENTS.md) **§2** backlog and [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) phases 0–7 (complete).
 
 | FR | Summary | Status |
 |----|---------|--------|
@@ -8,7 +8,6 @@ Aligned with [`REQUIREMENTS.md`](REQUIREMENTS.md) **§2** backlog and [`IMPLEMEN
 | FR-D2 | README + Postman env vs collection vars | Documented in [`README.md`](../README.md) and [`postman/README.md`](../postman/README.md). |
 | FR-R8 | List filters on reservations | **`GET /v1/reservations`**: `status`, `hotel_id`, `stay_from` + `stay_to` (overlap). Indexes in migration **0013**. |
 | FR-O1 | Correlation ID | Gateway **`x-request-id`** (generate or forward); forwarded to Workers; echoed on responses. |
-| FR-O3 | Readiness | **`GET /health/ready`** — Auth0 JWKS fetch (no Supabase ping). |
 | FR-C6 | Currency policy | **`inventory.chain.default_currency`** (default `USD`); quote/create use chain currency in RPC (**0013**+). |
 | FR-C5 | Persist quote on reservation | **`reservations.reservation_stub.pricing_snapshot`**; optional **`expected_total_cents`** on create → **409** on mismatch. |
 | FR-C4 | Itemized fees | **`pricing_snapshot.fee_line_items`** (JSON array); fixed resort fee rolled into line items in RPC. |
@@ -25,8 +24,10 @@ Aligned with [`REQUIREMENTS.md`](REQUIREMENTS.md) **§2** backlog and [`IMPLEMEN
 | FR-R10 | Reservation notes | **`internal_note`**, **`guest_note`** on **`reservation_stub`**; **`PATCH /v1/reservations/{id}/notes`** (**0016**). |
 | FR-Z1 | Roles / scopes | Gateway enforces route policies when claim **`https://hospitality.app/claims/roles`** is present (`read_only`, `front_desk`, `manager`, `integration`). |
 | FR-Z2 | M2M vs user | **`gty: client-credentials`** tokens with roles enforced: read + create only (no confirm/cancel/guest/notes write). |
-| FR-D1 | CI / contract tests | Vitest unit tests; **OpenAPI contract guard** (`tests/openapi-contract.test.ts`); **post-deploy smoke** on `main` (`scripts/smoke-deploy-public.mjs`, secret **`GATEWAY_BASE_URL`**). Golden-path script (**7B**) planned. |
-| FR-D2 | README / docs sync | **README** + **REQUIREMENTS §1** through migration **0016** (Phase **7F**). |
+| FR-O2 | Metrics / structured logs | Gateway **`withRequestMetrics`**: JSON log per request; **Workers Analytics Engine** binding **`ANALYTICS`** (**7D**). |
+| FR-O3 | Readiness | **`GET /health/ready`**: JWKS + optional Supabase PostgREST ping (**7E**). |
+| FR-D1 | CI / contract tests | Vitest; OpenAPI guard; public + golden-path smoke; **Newman** optional (**7G**). |
+| FR-D2 | README / docs sync | **README** + **REQUIREMENTS §1** through migration **0016**. |
 
 **Migrations:** apply through [`0016_cancellation_notes.sql`](../supabase/migrations/0016_cancellation_notes.sql).
 

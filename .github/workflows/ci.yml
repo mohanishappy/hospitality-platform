@@ -124,7 +124,32 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Install dependencies
+        run: npm ci
+
       - name: Post-deploy public smoke (7A)
         env:
           GATEWAY_BASE_URL: ${{ secrets.GATEWAY_BASE_URL }}
         run: node scripts/smoke-deploy-public.mjs
+
+      - name: Golden-path API smoke (7B)
+        env:
+          GATEWAY_BASE_URL: ${{ secrets.GATEWAY_BASE_URL }}
+          SMOKE_ACCESS_TOKEN: ${{ secrets.SMOKE_ACCESS_TOKEN }}
+        run: |
+          if [ -z "${SMOKE_ACCESS_TOKEN:-}" ]; then
+            echo "Skipping golden-path smoke (SMOKE_ACCESS_TOKEN not set)"
+            exit 0
+          fi
+          node scripts/smoke-api.mjs
+
+      - name: Newman Postman smoke (7G)
+        env:
+          GATEWAY_BASE_URL: ${{ secrets.GATEWAY_BASE_URL }}
+          SMOKE_ACCESS_TOKEN: ${{ secrets.SMOKE_ACCESS_TOKEN }}
+        run: |
+          if [ -z "${SMOKE_ACCESS_TOKEN:-}" ]; then
+            echo "Skipping Newman (SMOKE_ACCESS_TOKEN not set)"
+            exit 0
+          fi
+          node scripts/run-newman.mjs

@@ -11,6 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "smoke:deploy": "node scripts/smoke-deploy-public.mjs",
+    "smoke:api": "node scripts/smoke-api.mjs",
+    "smoke:newman": "node scripts/run-newman.mjs",
     "typecheck": "npm run typecheck:inventory && npm run typecheck:reservations && npm run typecheck:gateway",
     "typecheck:inventory": "cd services/inventory && npx tsc --noEmit",
     "typecheck:reservations": "cd services/reservations && npx tsc --noEmit",
@@ -27,6 +29,7 @@
     "node": ">=20"
   },
   "devDependencies": {
+    "newman": "^6.2.1",
     "typescript": "^5.7.2",
     "vitest": "^3.0.9",
     "wrangler": "^4.81.0"

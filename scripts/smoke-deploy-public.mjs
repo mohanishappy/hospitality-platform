@@ -12,7 +12,7 @@ if (!base) {
 
 const checks = [
   { path: "/health", expectJson: (j) => j.ok === true },
-  { path: "/health/ready", expectJson: (j) => typeof j.ok === "boolean" },
+  { path: "/health/ready", expectJson: (j) => j.ok === true && j.checks && typeof j.checks.jwks === "boolean" },
   {
     path: "/openapi.json",
     expectJson: (j) => typeof j.openapi === "string" && j.paths && j.paths["/v1/reservations"],

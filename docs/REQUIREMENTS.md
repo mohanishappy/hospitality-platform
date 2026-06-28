@@ -128,14 +128,14 @@ Prioritize into releases (e.g. commercial → search → operations).
 | ID | Requirement |
 |----|-------------|
 | **FR-O1** | **Request / correlation IDs** propagated from gateway to workers for log correlation. |
-| **FR-O2** | **Metrics** (latency, error rates by route) and optional alerting. |
-| **FR-O3** | **Readiness** checks beyond liveness **`/health`**, without exposing secrets (optional). |
+| **FR-O2** | **Metrics** (latency, error rates by route) and optional alerting. *Shipped: gateway structured JSON logs + **Analytics Engine** dataset (**7D**).* |
+| **FR-O3** | **Readiness** checks beyond liveness **`/health`**, without exposing secrets. *Shipped: JWKS + optional Supabase ping on **`GET /health/ready`** (**7E**).* |
 
 ### 2.6 Developer experience
 
 | ID | Requirement |
 |----|-------------|
-| **FR-D1** | **Automated** contract or integration tests in CI (staging or mocked dependencies). *Partial: Vitest unit tests + **OpenAPI contract guard**; post-deploy public smoke on **`main`**; golden-path script planned (**7B**).* |
+| **FR-D1** | **Automated** contract or integration tests in CI (staging or mocked dependencies). *Partial: Vitest + OpenAPI guard; post-deploy smoke; **golden-path `smoke-api.mjs`** (optional CI).* |
 | **FR-D2** | Root **README** and Postman docs stay aligned on which variables live in **environment** vs **collection**. |
 
 ### 2.7 Client applications (dependent on API)

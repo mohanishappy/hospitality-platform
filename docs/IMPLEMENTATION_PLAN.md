@@ -101,7 +101,7 @@ Original scope (**FR-O2**, **FR-D1**) plus items that reduce manual testing and 
 | **7F** | **Doc + tracker sync** | FR-D2 | S | **`REQUIREMENTS.md` §1** through **0016**; **`README.md`** layout table; single “as-built” migration number. Stops doc hunting during Phase 8. |
 | **7G** | **Newman (optional)** | FR-D1 | S | Run Postman collection in CI when **`access_token`** + **`GATEWAY_BASE_URL`** secrets set; skip gracefully when absent. Reuses existing Postman investment. |
 
-**Exit (Phase 7):** Deploys self-verify; one command reproduces booking flow locally; logs/metrics visible; docs match **0016**.
+**Exit (Phase 7):** Deploys self-verify; one command reproduces booking flow locally; logs/metrics visible; docs match **0016**. **Tracks 7A–7G complete.**
 
 **Not in Phase 7** (defer): payments, soft-hold expiry cron, admin rate-plan CRUD, full fee catalog (**FR-C4** partial is enough for now).
 
@@ -144,9 +144,9 @@ Split so backend can ship while UI starts:
 | FR-Z1 | 6 | Roles / scopes |
 | FR-Z2 | 6 | M2M vs user policies |
 | FR-O1 | 1 | Correlation IDs |
-| FR-O2 | 7 (7D) | Metrics + structured logs |
-| FR-O3 | 1 + 7 (7E) | Readiness (+ Supabase ping in 7E) |
-| FR-D1 | 0 + 7 (7A–7C, 7G) | Unit tests (done); **7A/7C shipped**; golden path + Newman planned |
+| FR-O2 | 7 (7D) | Metrics + structured logs (**7D shipped**) |
+| FR-O3 | 1 + 7 (7E) | Readiness — JWKS + optional Supabase ping (**7E shipped**) |
+| FR-D1 | 0 + 7 | **7A–7C, 7B, 7G shipped** (Newman optional when token unset) |
 | FR-D2 | 0 + 7 (7F) | README / REQUIREMENTS sync through **0016** (**7F shipped** in batch 1) |
 | FR-U1 | 8 | SPA |
 | FR-U2 | 8 | Staff calendar UI (after FR-V1/V2) |
@@ -178,3 +178,5 @@ Split so backend can ship while UI starts:
 | 2026-04-07 | Phase **6**: migration **0016** (cancellation metadata + notes); **`PATCH …/notes`**; gateway **roles** claim + route policies (**FR-Z1/Z2** soft rollout). |
 | 2026-06-27 | Phase **7** expanded into parallel tracks **7A–7G** (smoke CI, golden-path script, OpenAPI guard, metrics, readiness, doc sync, optional Newman). |
 | 2026-06-27 | Phase **7 batch 1**: **7A** post-deploy smoke job + **`scripts/smoke-deploy-public.mjs`**; **7C** OpenAPI contract Vitest; **7F** README + REQUIREMENTS through **0016**. |
+| 2026-06-27 | Phase **7 batch 2**: **7B** **`scripts/smoke-api.mjs`** + optional CI step; **7E** readiness Supabase ping on gateway **`/health/ready`**. |
+| 2026-06-27 | Phase **7 batch 3**: **7D** structured logs + Analytics Engine; **7G** Newman in CI (**`scripts/run-newman.mjs`**). Phase **7 complete**. |

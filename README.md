@@ -15,6 +15,8 @@ Microservices on **Cloudflare Workers** with **Supabase Postgres** and **Auth0**
 | `postman/` | Postman **collection** + **example environment** for gateway requests ([`postman/README.md`](postman/README.md)) |
 | `docs/FR_STATUS.md` | Backlog **FR** status through phases **0–6** (what shipped vs planned) |
 | `scripts/smoke-deploy-public.mjs` | Post-deploy public smoke (`npm run smoke:deploy`; CI **smoke** job on `main`) |
+| `scripts/smoke-api.mjs` | Golden-path booking smoke (`npm run smoke:api`; optional CI step with **`SMOKE_ACCESS_TOKEN`**) |
+| `scripts/run-newman.mjs` | Newman Postman run (`npm run smoke:newman`; optional CI step) |
 
 **API spec (gateway, public):** `GET /openapi.json` (OpenAPI 3.0); `GET /docs` (Swagger UI — use **Authorize** with a Bearer token for protected operations). Contract source: `services/gateway/src/openapi.json`.
 
@@ -85,6 +87,9 @@ npm run deploy:all
 cd services/gateway
 npx wrangler secret put AUTH0_DOMAIN      # e.g. dev-xxx.us.auth0.com
 npx wrangler secret put AUTH0_AUDIENCE    # API identifier
+# Optional (readiness Supabase ping):
+# npx wrangler secret put SUPABASE_URL
+# npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 ```
 
 ### Secrets (inventory + reservations)
@@ -110,13 +115,23 @@ npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 | **`SUPABASE_ACCESS_TOKEN`**, **`SUPABASE_PROJECT_REF`**, **`SUPABASE_DB_PASSWORD`** | Required for the **migrate** job on `main` (see [Database migrations](#database-migrations-cli-or-github-actions) above). |
 | **`CLOUDFLARE_API_TOKEN`** | API token with **Workers Scripts: Edit** (and **Account: Read** if prompted). Create under [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens) (e.g. “Edit Cloudflare Workers” template, scoped to the right account). |
 | **`CLOUDFLARE_ACCOUNT_ID`** | Cloudflare account ID (Workers dashboard URL or **Account Home** → right sidebar). |
-| **`GATEWAY_BASE_URL`** | Deployed gateway root (no trailing slash), e.g. `https://hospitality-gateway.<subdomain>.workers.dev` — used by the **smoke** job after deploy (**7A**). |
+| **`GATEWAY_BASE_URL`** | Deployed gateway root (no trailing slash) — **smoke** job after deploy. |
+| **`SMOKE_ACCESS_TOKEN`** | Optional M2M token for golden-path **`smoke-api.mjs`** in CI; skipped when unset. |
 
 **Not stored in GitHub:** Worker runtime secrets (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `AUTH0_*`). Set those once per Worker with `wrangler secret put` (or the dashboard); CI only publishes new **code** bundles and runs **remote** DB migrations against the linked Supabase project.
 
 You can re-run a deploy from the **Actions** tab (**Run workflow**) without pushing.
 
-After deploy on `main`, CI runs **`node scripts/smoke-deploy-public.mjs`** against **`GATEWAY_BASE_URL`** (`GET /health`, `/health/ready`, `/openapi.json`). Run locally: `GATEWAY_BASE_URL=https://... npm run smoke:deploy`.
+After deploy on `main`, CI runs public smoke then optional golden-path smoke. Locally:
+
+```powershell
+$env:GATEWAY_BASE_URL = "https://your-gateway.workers.dev"
+npm run smoke:deploy
+$env:SMOKE_ACCESS_TOKEN = "<access_token>"
+npm run smoke:api
+```
+
+Optional gateway secrets for **`GET /health/ready`** Supabase ping: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (same as workers).
 
 ## Postman
 
@@ -177,7 +192,7 @@ npm run dev:gateway        # other terminal; needs bindings to the other two
 **Routed paths (through gateway):**
 
 - `GET /health` — no auth.
-- `GET /health/ready` — no auth; JWKS check (Auth0 config).
+- **`GET /health/ready`** — JWKS + optional Supabase ping; gateway logs JSON `{ request_id, method, path, status, duration_ms }` per request (**7D**).
 - `GET /openapi.json`, `GET /docs` — no auth; public API contract.
 - `GET /v1/inventory/hotels` — Bearer + claim `https://hospitality.app/claims/chain_id`.
 - `GET /v1/inventory/hotels/:id` — same; one hotel for that chain (**404** if wrong id/chain).
@@ -201,5 +216,4 @@ npm run dev:gateway        # other terminal; needs bindings to the other two
 
 ## Next steps
 
-- **Phase 7** (in progress): golden-path smoke script, metrics, readiness + Supabase ping — see [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
-- **Phase 8**: guest/staff SPA (Vite + React + Auth0).
+- **Phase 8**: guest/staff SPA (Vite + React + Auth0). Phase **7** complete — see [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).

@@ -1,2 +1,5 @@
 AUTH0_DOMAIN=your-tenant.auth0.com
 AUTH0_AUDIENCE=https://your-api-identifier
+# Optional: enable Supabase ping on GET /health/ready (same values as inventory/reservations workers)
+# SUPABASE_URL=https://your-project.supabase.co
+# SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
