@@ -1,4 +1,5 @@
 import { useAuth0 } from "@auth0/auth0-react";
+import { stashPostLogoutReturn } from "../lib/authReturn";
 
 type Props = {
   audience: string;
@@ -56,9 +57,10 @@ export function AuthBar({ audience, chainCode }: Props) {
       <button
         type="button"
         className="secondary"
-        onClick={() =>
-          logout({ logoutParams: { returnTo: window.location.origin + returnTo } })
-        }
+        onClick={() => {
+          stashPostLogoutReturn(returnTo);
+          logout({ logoutParams: { returnTo: window.location.origin } });
+        }}
       >
         Sign out
       </button>

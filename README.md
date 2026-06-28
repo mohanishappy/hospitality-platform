@@ -212,7 +212,7 @@ Responses include **`x-request-id`** for correlation; send the same header to tr
 
 Staff/guest **SPA** under [`apps/web`](apps/web): **path-based tenants** at **`/c/:chainCode`** (e.g. `/c/HBR`), anonymous **search → quote → book** via **`x-chain-code`**, optional Auth0 login for staff calendar and reservation tools.
 
-1. In Auth0, create a **Single Page Application** (separate from M2M). Set **Allowed Callback URLs**, **Allowed Logout URLs**, and **Allowed Web Origins** to `http://localhost:5173` and your production Pages URL (e.g. `https://hospitality-web.pages.dev` after first deploy). Authorize it for your API audience.
+1. In Auth0, create a **Single Page Application** (separate from M2M). Set **Allowed Callback URLs**, **Allowed Logout URLs**, and **Allowed Web Origins** to your app origin(s), e.g. `http://localhost:5173` and `https://hospitality-web.pages.dev` (production Pages URL after first deploy). The SPA uses **origin-only** callback and logout URLs (Auth0 requirement); brand paths like `/c/DEMO` are restored client-side after login/logout. Optional: add `https://your-pages.dev/*` to **Allowed Logout URLs** if you prefer Auth0 to redirect directly to deep links. Authorize the SPA for your API audience.
 2. For user login, use the **Post Login Action** in [§2 Auth0](#2-auth0) (sets **`chain_id`**, **`roles`**, default **`guest`**, and requires **`email`** scope on the SPA).
 3. Copy [`apps/web/.env.example`](apps/web/.env.example) → `apps/web/.env` and fill **`VITE_*`** values.
 4. From repo root:

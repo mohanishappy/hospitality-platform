@@ -15,6 +15,7 @@ import {
 import { useAuthReady } from "./hooks/useGatewayToken";
 import { useTenantPath } from "./hooks/useChainPath";
 import { fetchChainByCode } from "./api/gateway";
+import { consumePostLogoutReturn } from "./lib/authReturn";
 import type { AppConfig } from "./config";
 import "./App.css";
 
@@ -101,6 +102,13 @@ function ChainSite({ config, chainCode }: { config: AppConfig; chainCode: string
 
 export function App({ config }: Props) {
   const { chainCode, enterpriseCode } = useTenantPath();
+
+  useEffect(() => {
+    const path = consumePostLogoutReturn();
+    if (path) {
+      window.history.replaceState({}, document.title, path);
+    }
+  }, []);
 
   if (enterpriseCode) {
     return <EnterprisePage config={config} enterpriseCode={enterpriseCode} />;
