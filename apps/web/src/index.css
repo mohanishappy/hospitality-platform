@@ -216,6 +216,54 @@
     @apply border border-border bg-secondary/80 text-secondary-foreground hover:bg-secondary;
   }
 
+  .staff-row-main {
+    @apply flex flex-col gap-0.5;
+  }
+
+  .staff-meta {
+    @apply text-sm text-muted-foreground;
+  }
+
+  .staff-row-actions {
+    @apply mt-3 flex flex-wrap gap-2;
+  }
+
+  .staff-edit-grants {
+    @apply mt-3 flex flex-col gap-2 border-t border-dashed border-border pt-3;
+  }
+
+  .staff-edit-actions {
+    @apply flex flex-wrap gap-2;
+  }
+
+  .chain-checkboxes {
+    @apply flex flex-col gap-2 border-0 p-0;
+  }
+
+  .chain-checkboxes legend {
+    @apply mb-1 text-sm font-semibold;
+  }
+
+  .admin-form-inline {
+    @apply mt-4 flex flex-col gap-3 border-t border-dashed border-border pt-4;
+  }
+
+  .admin-subnav {
+    @apply mt-4 flex flex-wrap gap-2;
+  }
+
+  .secondary-link {
+    @apply text-sm font-semibold text-primary no-underline hover:underline;
+  }
+
+  .invite-url-box {
+    @apply mt-4;
+  }
+
+  .invite-url-box input {
+    @apply mt-1 w-full font-mono text-xs;
+  }
+
   .staff-list {
     @apply flex list-none flex-col gap-3 p-0;
   }

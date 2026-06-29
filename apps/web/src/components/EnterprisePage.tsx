@@ -33,11 +33,13 @@ function EnterpriseSiteInner({
   enterpriseCode,
   enterpriseName,
   chains,
+  loadError,
 }: {
   config: AppConfig;
   enterpriseCode: string;
   enterpriseName: string;
   chains: ChainSummary[];
+  loadError?: string | null;
 }) {
   const { isAuthenticated } = useAuth0();
   const { ready } = useAuthReady();
@@ -71,6 +73,8 @@ function EnterpriseSiteInner({
         </HeroBand>
       }
     >
+      {loadError && <ErrorAlert message={loadError} />}
+
       <section className="space-y-4">
         <PageHeader title="Our brands" />
         {chains.length === 0 ? (
@@ -158,16 +162,12 @@ export function EnterprisePage({ config, enterpriseCode }: Props) {
       audience={config.auth0Audience}
       gatewayUrl={config.gatewayUrl}
     >
-      {error && (
-        <div className="mx-auto max-w-6xl px-4 pt-4">
-          <ErrorAlert message={error} />
-        </div>
-      )}
       <EnterpriseSiteInner
         config={config}
         enterpriseCode={enterpriseCode}
         enterpriseName={enterpriseName}
         chains={chains}
+        loadError={error}
       />
     </AccessClaimsProvider>
   );

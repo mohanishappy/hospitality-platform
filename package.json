@@ -16,6 +16,7 @@
     "smoke:admin": "node scripts/smoke-admin-api.mjs",
     "auth0:token": "node scripts/auth0-password-token.mjs",
     "e2e:admin": "playwright test e2e/admin-portal.spec.ts",
+    "e2e:screens": "playwright test e2e/all-screens.spec.ts",
     "test:admin": "node scripts/run-admin-tests.mjs",
     "smoke:newman": "node scripts/run-newman.mjs",
     "typecheck": "npm run typecheck:inventory && npm run typecheck:reservations && npm run typecheck:gateway && npm run typecheck:web",
