@@ -25,21 +25,17 @@ import { AdminPropertiesTab } from "./admin/AdminPropertiesTab";
 import { AdminRatesTab } from "./admin/AdminRatesTab";
 import { AdminStaffTab } from "./admin/AdminStaffTab";
 import { PanelErrorBoundary } from "./ErrorBoundary";
-import { SiteFooter } from "./SiteFooter";
+import { AdminSidebar, OpsShell } from "./layout/OpsShell";
+import { PageHeader } from "./layout/PageHeader";
+import { ErrorAlert } from "./shared/ErrorAlert";
+import { Button } from "./ui/button";
+import { Card, CardContent } from "./ui/card";
 
 type Props = {
   config: AppConfig;
   enterpriseCode: string;
   tab: EnterpriseAdminTab;
 };
-
-const TABS: { id: EnterpriseAdminTab; label: string }[] = [
-  { id: "staff", label: "Staff" },
-  { id: "brands", label: "Brands" },
-  { id: "properties", label: "Properties" },
-  { id: "rates", label: "Rates" },
-  { id: "availability", label: "Availability" },
-];
 
 function AdminShell({
   config,
@@ -65,65 +61,57 @@ function AdminShell({
 
   const loading = authLoading || (isAuthenticated && ready && claimsLoading);
 
+  const getHref = (t: EnterpriseAdminTab) => enterpriseAdminPath(enterpriseCode, t);
+
   return (
-    <div className="app">
-      <header className="site-header">
-        <div className="site-brand">
-          <button
-            type="button"
-            className="site-brand-link"
-            onClick={() => navigateToEnterprise(enterpriseCode)}
-          >
-            {enterpriseName}
-          </button>
-          <span className="admin-badge">Admin</span>
-        </div>
-        <div className="header-actions">
-          <button
-            type="button"
-            className="secondary"
-            onClick={() => navigateToEnterprise(enterpriseCode)}
-          >
-            ← Staff portal
-          </button>
-          <AuthBar audience={config.auth0Audience} />
-        </div>
-      </header>
+    <OpsShell
+      brandName={enterpriseName}
+      audience={config.auth0Audience}
+      gatewayUrl={config.gatewayUrl}
+      badge="Admin"
+      headerActions={
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => navigateToEnterprise(enterpriseCode)}
+        >
+          ← Staff portal
+        </Button>
+      }
+      sidebar={
+        <AdminSidebar
+          enterpriseCode={enterpriseCode}
+          tab={tab}
+          getHref={getHref}
+          onNavigate={(t) => navigateToEnterpriseAdmin(enterpriseCode, t)}
+        />
+      }
+    >
+      {loading && (
+        <p className="text-sm text-muted-foreground" aria-live="polite">
+          Checking access…
+        </p>
+      )}
 
-      <nav className="admin-nav" aria-label="Enterprise admin">
-        {TABS.map((t) => (
-          <a
-            key={t.id}
-            href={enterpriseAdminPath(enterpriseCode, t.id)}
-            className={tab === t.id ? "admin-nav-link active" : "admin-nav-link"}
-            onClick={(e) => {
-              e.preventDefault();
-              navigateToEnterpriseAdmin(enterpriseCode, t.id);
-            }}
-          >
-            {t.label}
-          </a>
-        ))}
-      </nav>
-
-      <main className="site-main">
-        {loading && <p className="muted">Checking access…</p>}
-
-        {!loading && !isAuthenticated && (
-          <section className="panel panel-wide">
-            <h1>Enterprise admin</h1>
-            <p className="lede">Sign in with a manager account to continue.</p>
+      {!loading && !isAuthenticated && (
+        <Card>
+          <CardContent className="space-y-4 p-8">
+            <PageHeader
+              title="Enterprise admin"
+              description="Sign in with a manager account to continue."
+            />
             <AuthBar audience={config.auth0Audience} />
-          </section>
-        )}
+          </CardContent>
+        </Card>
+      )}
 
-        {!loading && isAuthenticated && !isManager && (
-          <section className="panel panel-wide">
-            <h1>Manager access required</h1>
-            <p className="error">
-              Your account does not have the manager role for this enterprise.
-            </p>
-            <dl className="quote-breakdown">
+      {!loading && isAuthenticated && !isManager && (
+        <Card>
+          <CardContent className="space-y-4 p-8">
+            <PageHeader title="Manager access required" />
+            <ErrorAlert message="Your account does not have the manager role for this enterprise." />
+            <dl className="kv text-sm">
               <div>
                 <dt>Signed in as</dt>
                 <dd>{user?.email ?? "—"}</dd>
@@ -137,82 +125,105 @@ function AdminShell({
                 <dd>{enterpriseId ?? "none"}</dd>
               </div>
             </dl>
-            <p className="muted">
-              After 9B, roles come from <code>inventory.staff_member</code> via
-              the Auth0 Post Login Action — not from the email address alone.
-              Confirm the 9B Action is deployed,{" "}
-              <code>ACTION_CLAIMS_SECRET</code> matches on gateway + inventory +
-              Auth0, then <strong>sign out and sign in again</strong>.
+            <p className="text-sm text-muted-foreground">
+              After staff onboarding, roles come from{" "}
+              <code className="rounded bg-secondary px-1">inventory.staff_member</code>{" "}
+              via the Auth0 Post Login Action. Sign out and sign in again after accepting
+              an invite.
             </p>
-            <p className="muted">
+            <Button asChild variant="secondary">
               <a href={enterprisePath(enterpriseCode)}>← Back to {enterpriseName}</a>
-            </p>
-          </section>
-        )}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
-        {!loading && isAuthenticated && isManager && !enterpriseId && (
-          <section className="panel panel-wide">
-            <p className="error">
-              Your token has no enterprise scope. Re-login after accepting a
-              staff invite or contact support.
-            </p>
-          </section>
-        )}
+      {!loading && isAuthenticated && isManager && !enterpriseId && (
+        <ErrorAlert message="Your token has no enterprise scope. Re-login after accepting a staff invite or contact support." />
+      )}
 
-        {!loading && isAuthenticated && isManager && enterpriseId && (
-          <>
-            {tab === "staff" && (
-              <PanelErrorBoundary title="Staff admin">
-                <AdminStaffTab
-                  gatewayUrl={config.gatewayUrl}
-                  audience={config.auth0Audience}
-                  chains={chains}
-                />
-              </PanelErrorBoundary>
-            )}
-            {tab === "brands" && (
-              <PanelErrorBoundary title="Brands admin">
-                <AdminBrandsTab
-                  gatewayUrl={config.gatewayUrl}
-                  audience={config.auth0Audience}
-                  chains={chains}
-                  onChainsChange={reloadChains}
-                />
-              </PanelErrorBoundary>
-            )}
-            {tab === "properties" && (
-              <PanelErrorBoundary title="Properties admin">
-                <AdminPropertiesTab
-                  gatewayUrl={config.gatewayUrl}
-                  audience={config.auth0Audience}
-                  chains={chains}
-                />
-              </PanelErrorBoundary>
-            )}
-            {tab === "rates" && (
-              <PanelErrorBoundary title="Rates admin">
-                <AdminRatesTab
-                  gatewayUrl={config.gatewayUrl}
-                  audience={config.auth0Audience}
-                  chains={chains}
-                />
-              </PanelErrorBoundary>
-            )}
-            {tab === "availability" && (
-              <PanelErrorBoundary title="Availability admin">
-                <AdminAvailabilityTab
-                  gatewayUrl={config.gatewayUrl}
-                  audience={config.auth0Audience}
-                  chains={chains}
-                />
-              </PanelErrorBoundary>
-            )}
-          </>
-        )}
-      </main>
+      {!loading && isAuthenticated && isManager && enterpriseId && (
+        <>
+          <div className="md:hidden">
+            <nav
+              className="mb-4 flex gap-1 overflow-x-auto pb-2"
+              aria-label="Enterprise admin"
+            >
+              {(
+                [
+                  ["staff", "Staff"],
+                  ["brands", "Brands"],
+                  ["properties", "Properties"],
+                  ["rates", "Rates"],
+                  ["availability", "Availability"],
+                ] as const
+              ).map(([id, label]) => (
+                <a
+                  key={id}
+                  href={getHref(id)}
+                  className={
+                    tab === id ? "admin-nav-link active shrink-0" : "admin-nav-link shrink-0"
+                  }
+                  onClick={(e) => {
+                    e.preventDefault();
+                    navigateToEnterpriseAdmin(enterpriseCode, id);
+                  }}
+                >
+                  {label}
+                </a>
+              ))}
+            </nav>
+          </div>
 
-      <SiteFooter gatewayUrl={config.gatewayUrl} />
-    </div>
+          {tab === "staff" && (
+            <PanelErrorBoundary title="Staff admin">
+              <AdminStaffTab
+                gatewayUrl={config.gatewayUrl}
+                audience={config.auth0Audience}
+                chains={chains}
+              />
+            </PanelErrorBoundary>
+          )}
+          {tab === "brands" && (
+            <PanelErrorBoundary title="Brands admin">
+              <AdminBrandsTab
+                gatewayUrl={config.gatewayUrl}
+                audience={config.auth0Audience}
+                chains={chains}
+                onChainsChange={reloadChains}
+              />
+            </PanelErrorBoundary>
+          )}
+          {tab === "properties" && (
+            <PanelErrorBoundary title="Properties admin">
+              <AdminPropertiesTab
+                gatewayUrl={config.gatewayUrl}
+                audience={config.auth0Audience}
+                chains={chains}
+              />
+            </PanelErrorBoundary>
+          )}
+          {tab === "rates" && (
+            <PanelErrorBoundary title="Rates admin">
+              <AdminRatesTab
+                gatewayUrl={config.gatewayUrl}
+                audience={config.auth0Audience}
+                chains={chains}
+              />
+            </PanelErrorBoundary>
+          )}
+          {tab === "availability" && (
+            <PanelErrorBoundary title="Availability admin">
+              <AdminAvailabilityTab
+                gatewayUrl={config.gatewayUrl}
+                audience={config.auth0Audience}
+                chains={chains}
+              />
+            </PanelErrorBoundary>
+          )}
+        </>
+      )}
+    </OpsShell>
   );
 }
 
@@ -234,9 +245,7 @@ export function EnterpriseAdminPage({ config, enterpriseCode, tab }: Props) {
           setEnterpriseName(data.enterprise.name);
         }
       })
-      .catch(() => {
-        /* keep code */
-      });
+      .catch(() => undefined);
     void fetchEnterpriseChains(config.gatewayUrl, enterpriseCode)
       .then((data) => {
         if (!cancelled) setChains(data.chains ?? []);

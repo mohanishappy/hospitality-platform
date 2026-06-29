@@ -1,5 +1,6 @@
 import { useAuth0 } from "@auth0/auth0-react";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { Building2, Plus } from "lucide-react";
 import {
   createPlatformBootstrapInvite,
   createPlatformEnterprise,
@@ -16,8 +17,18 @@ import { useAuthReady, useGatewayToken } from "../hooks/useGatewayToken";
 import { useTenantPath } from "../hooks/useChainPath";
 import { formatRolesLabel } from "../lib/claims";
 import { hasPlatformOperatorRole } from "../lib/permissions";
+import { useToast } from "@/providers/ToastProvider";
 import { AuthBar } from "./AuthBar";
-import { SiteFooter } from "./SiteFooter";
+import { OpsShell } from "./layout/OpsShell";
+import { PageHeader } from "./layout/PageHeader";
+import { ErrorAlert } from "./shared/ErrorAlert";
+import { SuccessAlert } from "./shared/ErrorAlert";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Field, FieldLabel } from "./ui/label";
+import { Input } from "./ui/input";
+import { Separator } from "./ui/separator";
 
 type Props = {
   config: AppConfig;
@@ -29,12 +40,12 @@ function PlatformShell({ config }: Props) {
   const getToken = useGatewayToken(config.auth0Audience);
   const { roles, loading: claimsLoading } = useAccessClaims();
   const { navigateToEnterprise } = useTenantPath();
+  const { toast } = useToast();
 
   const [enterprises, setEnterprises] = useState<EnterpriseSummary[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-
   const [newName, setNewName] = useState("");
   const [newCode, setNewCode] = useState("");
   const [inviteEmail, setInviteEmail] = useState<Record<string, string>>({});
@@ -74,6 +85,7 @@ function PlatformShell({ config }: Props) {
       setNewName("");
       setNewCode("");
       setSuccess("Enterprise created.");
+      toast("Enterprise created", "success");
       await reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
@@ -91,7 +103,9 @@ function PlatformShell({ config }: Props) {
       await patchPlatformEnterprise(config.gatewayUrl, token, ent.id, {
         active: ent.active === false,
       });
-      setSuccess(ent.active === false ? "Enterprise reactivated." : "Enterprise suspended.");
+      setSuccess(
+        ent.active === false ? "Enterprise reactivated." : "Enterprise suspended."
+      );
       await reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Update failed");
@@ -117,7 +131,10 @@ function PlatformShell({ config }: Props) {
         enterpriseId,
         { email }
       );
-      setSuccess(`Invite created for ${email}. Share: ${data.invite.accept_url}`);
+      const msg = `Invite created for ${email}. Share: ${data.invite.accept_url}`;
+      setSuccess(msg);
+      toast("Invite link created", "success");
+      void navigator.clipboard.writeText(data.invite.accept_url);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invite failed");
     } finally {
@@ -126,158 +143,174 @@ function PlatformShell({ config }: Props) {
   };
 
   return (
-    <div className="app">
-      <header className="site-header">
-        <div className="site-brand">
-          <a href="/" className="site-brand-link">
-            Platform
-          </a>
-          <span className="admin-badge">Ops</span>
-        </div>
-        <AuthBar audience={config.auth0Audience} />
-      </header>
+    <OpsShell
+      brandName="Platform"
+      brandHref="/"
+      audience={config.auth0Audience}
+      gatewayUrl={config.gatewayUrl}
+      badge="Ops"
+    >
+      {loading && (
+        <p className="text-sm text-muted-foreground">Checking access…</p>
+      )}
 
-      <main className="site-main">
-        {loading && <p className="muted">Checking access…</p>}
-
-        {!loading && !isAuthenticated && (
-          <section className="panel panel-wide">
-            <h1>Platform Portal</h1>
-            <p className="lede">Sign in with a platform operator account.</p>
+      {!loading && !isAuthenticated && (
+        <Card>
+          <CardContent className="space-y-4 p-8">
+            <PageHeader
+              title="Platform Portal"
+              description="Sign in with a platform operator account."
+            />
             <AuthBar audience={config.auth0Audience} />
-          </section>
-        )}
+          </CardContent>
+        </Card>
+      )}
 
-        {!loading && isAuthenticated && !isOperator && (
-          <section className="panel panel-wide">
-            <h1>Platform access required</h1>
-            <p className="error">
-              Your account does not have the platform_operator role.
-            </p>
-            <dl className="quote-breakdown">
-              <div>
-                <dt>Signed in as</dt>
+      {!loading && isAuthenticated && !isOperator && (
+        <Card>
+          <CardContent className="space-y-4 p-8">
+            <PageHeader title="Platform access required" />
+            <ErrorAlert message="Your account does not have the platform_operator role." />
+            <dl className="space-y-2 text-sm">
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Signed in as</dt>
                 <dd>{user?.email ?? "—"}</dd>
               </div>
-              <div>
-                <dt>Token roles</dt>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Token roles</dt>
                 <dd>{formatRolesLabel(roles)}</dd>
               </div>
             </dl>
-            <p className="muted">
-              Add your email to <code>inventory.platform_operator</code>, ensure
-              the Post Login Action is deployed, then sign out and sign in again.
-            </p>
-          </section>
-        )}
+          </CardContent>
+        </Card>
+      )}
 
-        {!loading && isAuthenticated && isOperator && (
-          <>
-            <section className="panel panel-wide">
-              <h1>Enterprises</h1>
-              <p className="lede muted">
-                Onboard hotel groups and invite the first all-chain manager. Brand
-                creation happens in the Enterprise Admin Portal after accept.
-              </p>
-              {error && <p className="error">{error}</p>}
-              {success && <p className="ok">{success}</p>}
+      {!loading && isAuthenticated && isOperator && (
+        <>
+          <PageHeader
+            eyebrow="Platform ops"
+            title="Enterprises"
+            description="Onboard hotel groups and invite the first all-chain manager."
+          />
 
-              <form className="admin-form" onSubmit={(e) => void submitCreate(e)}>
-                <h2 className="section-title">Create enterprise</h2>
-                <div className="guest-fields">
-                  <label>
-                    Name
-                    <input
-                      value={newName}
-                      onChange={(e) => setNewName(e.target.value)}
-                      required
-                    />
-                  </label>
-                  <label>
-                    Code
-                    <input
-                      value={newCode}
-                      onChange={(e) =>
-                        setNewCode(e.target.value.toUpperCase())
-                      }
-                      placeholder="ACME"
-                      required
-                    />
-                  </label>
-                </div>
-                <button type="submit" disabled={busy}>
+          {error && <ErrorAlert message={error} />}
+          {success && <SuccessAlert message={success} />}
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Plus className="h-5 w-5" />
+                Create enterprise
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form
+                className="grid max-w-lg gap-4 sm:grid-cols-2"
+                onSubmit={(e) => void submitCreate(e)}
+              >
+                <Field>
+                  <FieldLabel htmlFor="ent-name">Name</FieldLabel>
+                  <Input
+                    id="ent-name"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    required
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="ent-code">Code</FieldLabel>
+                  <Input
+                    id="ent-code"
+                    value={newCode}
+                    onChange={(e) => setNewCode(e.target.value.toUpperCase())}
+                    placeholder="ACME"
+                    required
+                  />
+                </Field>
+                <Button type="submit" disabled={busy} className="sm:col-span-2 sm:w-fit">
                   Create enterprise
-                </button>
+                </Button>
               </form>
-            </section>
+            </CardContent>
+          </Card>
 
-            <section className="panel panel-wide">
-              <h2 className="section-title">All enterprises</h2>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Building2 className="h-5 w-5" />
+                All enterprises
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
               {enterprises.length === 0 ? (
-                <p className="muted">No enterprises yet.</p>
+                <p className="text-sm text-muted-foreground">No enterprises yet.</p>
               ) : (
-                <ul className="admin-pick-list">
-                  {enterprises.map((ent) => (
-                    <li key={ent.id} className="admin-pick-item">
-                      <div>
-                        <strong>{ent.name}</strong>
-                        <span className="muted"> · {ent.code}</span>
-                        {ent.active === false && (
-                          <span className="bad"> · Suspended</span>
-                        )}
-                      </div>
-                      <div className="admin-form admin-form-inline">
-                        <button
-                          type="button"
-                          className="secondary"
-                          disabled={busy}
-                          onClick={() => {
-                            navigateToEnterprise(ent.code);
-                          }}
-                        >
-                          Open hub →
-                        </button>
-                        <button
-                          type="button"
-                          className="secondary"
-                          disabled={busy}
-                          onClick={() => void toggleActive(ent)}
-                        >
-                          {ent.active === false ? "Reactivate" : "Suspend"}
-                        </button>
-                        <label>
+                enterprises.map((ent) => (
+                  <div
+                    key={ent.id}
+                    className="rounded-xl border border-border bg-card/50 p-4"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <strong>{ent.name}</strong>
+                      <span className="text-sm text-muted-foreground">· {ent.code}</span>
+                      {ent.active === false && (
+                        <Badge variant="destructive">Suspended</Badge>
+                      )}
+                    </div>
+                    <Separator className="my-4" />
+                    <div className="flex flex-wrap items-end gap-3">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => navigateToEnterprise(ent.code)}
+                      >
+                        Open hub →
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => void toggleActive(ent)}
+                      >
+                        {ent.active === false ? "Reactivate" : "Suspend"}
+                      </Button>
+                      <Field className="min-w-[14rem] flex-1">
+                        <FieldLabel htmlFor={`invite-${ent.id}`}>
                           Bootstrap manager
-                          <input
-                            type="email"
-                            value={inviteEmail[ent.id] ?? ""}
-                            onChange={(e) =>
-                              setInviteEmail((prev) => ({
-                                ...prev,
-                                [ent.id]: e.target.value,
-                              }))
-                            }
-                            placeholder="manager@tenant.demo"
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => void submitInvite(ent.id)}
-                        >
-                          Send invite
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                        </FieldLabel>
+                        <Input
+                          id={`invite-${ent.id}`}
+                          type="email"
+                          value={inviteEmail[ent.id] ?? ""}
+                          onChange={(e) =>
+                            setInviteEmail((prev) => ({
+                              ...prev,
+                              [ent.id]: e.target.value,
+                            }))
+                          }
+                          placeholder="manager@tenant.demo"
+                        />
+                      </Field>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => void submitInvite(ent.id)}
+                      >
+                        Send invite
+                      </Button>
+                    </div>
+                  </div>
+                ))
               )}
-            </section>
-          </>
-        )}
-      </main>
-
-      <SiteFooter gatewayUrl={config.gatewayUrl} />
-    </div>
+            </CardContent>
+          </Card>
+        </>
+      )}
+    </OpsShell>
   );
 }
 

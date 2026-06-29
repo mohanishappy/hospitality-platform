@@ -1,4 +1,5 @@
 import { useAuth0 } from "@auth0/auth0-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchCalendar,
@@ -12,6 +13,15 @@ import { useAccessClaims } from "../hooks/useAccessClaims";
 import { useGatewayToken } from "../hooks/useGatewayToken";
 import { calendarGridCells, monthRange } from "../lib/format";
 import { hotelOptionLabel } from "../lib/hotelLabel";
+import { ErrorAlert } from "./shared/ErrorAlert";
+import { EmptyState } from "./shared/EmptyState";
+import { PanelSkeleton } from "./shared/LoadingBlock";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Field, FieldLabel } from "./ui/label";
+import { Select } from "./ui/select";
+import { cn } from "@/lib/utils";
 
 type Props = {
   gatewayUrl: string;
@@ -38,7 +48,6 @@ export function CalendarPanel({ gatewayUrl, audience, chainCode }: Props) {
   const now = useMemo(() => new Date(), []);
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth());
-
   const [hotels, setHotels] = useState<HotelSummary[]>([]);
   const [roomTypes, setRoomTypes] = useState<RoomTypeSummary[]>([]);
   const [hotelId, setHotelId] = useState("");
@@ -81,7 +90,7 @@ export function CalendarPanel({ gatewayUrl, audience, chainCode }: Props) {
     }
 
     let cancelled = false;
-    (async () => {
+    void (async () => {
       setError(null);
       try {
         const token = await getTokenRef.current();
@@ -112,7 +121,7 @@ export function CalendarPanel({ gatewayUrl, audience, chainCode }: Props) {
     }
 
     let cancelled = false;
-    (async () => {
+    void (async () => {
       setError(null);
       try {
         const token = await getTokenRef.current();
@@ -140,7 +149,7 @@ export function CalendarPanel({ gatewayUrl, audience, chainCode }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [gatewayUrl, isAuthenticated, selectedHotelId]);
+  }, [gatewayUrl, isAuthenticated, selectedHotelId, chainCode]);
 
   useEffect(() => {
     if (!isAuthenticated || !selectedHotelId || !selectedRoomTypeId) {
@@ -149,7 +158,7 @@ export function CalendarPanel({ gatewayUrl, audience, chainCode }: Props) {
     }
 
     let cancelled = false;
-    (async () => {
+    void (async () => {
       setBusy(true);
       setError(null);
       try {
@@ -185,6 +194,7 @@ export function CalendarPanel({ gatewayUrl, audience, chainCode }: Props) {
     range.to,
     selectedHotelId,
     selectedRoomTypeId,
+    chainCode,
   ]);
 
   const shiftMonth = (delta: number) => {
@@ -193,126 +203,146 @@ export function CalendarPanel({ gatewayUrl, audience, chainCode }: Props) {
     setViewMonth(next.getMonth());
   };
 
-  if (!isAuthenticated) {
-    return null;
-  }
+  if (!isAuthenticated) return null;
 
   return (
-    <section className="panel panel-wide">
-      <div className="panel-head">
-        <h2>Availability</h2>
-        <div className="calendar-nav">
-          <button
+    <Card>
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
+        <CardTitle>Availability</CardTitle>
+        <div className="flex items-center gap-1">
+          <Button
             type="button"
-            className="secondary"
+            variant="secondary"
+            size="icon"
             aria-label="Previous month"
             onClick={() => shiftMonth(-1)}
           >
-            ←
-          </button>
-          <span className="calendar-title">{range.label}</span>
-          <button
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="min-w-[9rem] text-center text-sm font-semibold">
+            {range.label}
+          </span>
+          <Button
             type="button"
-            className="secondary"
+            variant="secondary"
+            size="icon"
             aria-label="Next month"
             onClick={() => shiftMonth(1)}
           >
-            →
-          </button>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
         </div>
-      </div>
-
-      <div className="calendar-filters">
-        <label>
-          Hotel
-          <select
-            value={selectedHotelId}
-            onChange={(e) => setHotelId(e.target.value)}
-            disabled={hotels.length === 0}
-          >
-            {hotels.length === 0 ? (
-              <option value="">No hotels</option>
-            ) : (
-              hotels.map((hotel) => (
-                <option key={hotel.id} value={hotel.id}>
-                  {hotelOptionLabel(hotel, isMultiChain && !chainCode)}
-                </option>
-              ))
-            )}
-          </select>
-        </label>
-        <label>
-          Room type
-          <select
-            value={selectedRoomTypeId}
-            onChange={(e) => setRoomTypeId(e.target.value)}
-            disabled={roomTypes.length === 0 || !selectedHotelId}
-          >
-            {!selectedHotelId || roomTypes.length === 0 ? (
-              <option value="">
-                {!selectedHotelId ? "Select a hotel" : "No room types"}
-              </option>
-            ) : (
-              roomTypes.map((rt) => (
-                <option key={rt.id} value={rt.id}>
-                  {rt.name} ({rt.code})
-                </option>
-              ))
-            )}
-          </select>
-        </label>
-      </div>
-
-      {hotels.length === 0 && !error && !busy && (
-        <p className="muted">No hotels available for your chain.</p>
-      )}
-      {selectedHotelId && roomTypes.length === 0 && !error && !busy && (
-        <p className="muted">No room types for this hotel.</p>
-      )}
-
-      {error && <p className="error">{error}</p>}
-      {busy && <p className="muted">Loading calendar…</p>}
-
-      <div className="calendar-grid" aria-label={`Calendar for ${range.label}`}>
-        {WEEKDAYS.map((name) => (
-          <div key={name} className="calendar-weekday">
-            {name}
-          </div>
-        ))}
-        {gridCells.map((cell, index) => {
-          if (!cell) {
-            return <div key={`pad-${index}`} className="calendar-cell empty" />;
-          }
-          const key = dayKey(cell);
-          const day = dayMap.get(key);
-          const bookable = day?.bookable ?? false;
-          const remaining = day?.remaining_units;
-
-          return (
-            <div
-              key={key}
-              className={`calendar-cell ${bookable ? "bookable" : "sold-out"}`}
-              title={
-                day
-                  ? `${key}: ${remaining ?? "?"} remaining, occupancy ${day.occupancy ?? 0}, blocked ${day.units_blocked ?? 0}, holds ${day.soft_hold_units ?? 0}`
-                  : key
-              }
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="flex flex-wrap gap-4">
+          <Field className="min-w-[12rem] flex-1">
+            <FieldLabel htmlFor="cal-hotel">Hotel</FieldLabel>
+            <Select
+              id="cal-hotel"
+              value={selectedHotelId}
+              onChange={(e) => setHotelId(e.target.value)}
+              disabled={hotels.length === 0}
             >
-              <span className="calendar-day-num">{cell.getDate()}</span>
-              {day && (
-                <span className="calendar-day-meta">
-                  {remaining ?? "—"} left
-                </span>
+              {hotels.length === 0 ? (
+                <option value="">No hotels</option>
+              ) : (
+                hotels.map((hotel) => (
+                  <option key={hotel.id} value={hotel.id}>
+                    {hotelOptionLabel(hotel, isMultiChain && !chainCode)}
+                  </option>
+                ))
               )}
-            </div>
-          );
-        })}
-      </div>
+            </Select>
+          </Field>
+          <Field className="min-w-[12rem] flex-1">
+            <FieldLabel htmlFor="cal-room">Room type</FieldLabel>
+            <Select
+              id="cal-room"
+              value={selectedRoomTypeId}
+              onChange={(e) => setRoomTypeId(e.target.value)}
+              disabled={roomTypes.length === 0 || !selectedHotelId}
+            >
+              {!selectedHotelId || roomTypes.length === 0 ? (
+                <option value="">
+                  {!selectedHotelId ? "Select a hotel" : "No room types"}
+                </option>
+              ) : (
+                roomTypes.map((rt) => (
+                  <option key={rt.id} value={rt.id}>
+                    {rt.name} ({rt.code})
+                  </option>
+                ))
+              )}
+            </Select>
+          </Field>
+        </div>
 
-      <p className="muted calendar-legend">
-        Green = bookable · Gray = sold out or blocked · Hover a day for occupancy
-        details.
-      </p>
-    </section>
+        {hotels.length === 0 && !error && !busy && (
+          <EmptyState title="No hotels" description="No hotels available for your chain." />
+        )}
+        {selectedHotelId && roomTypes.length === 0 && !error && !busy && (
+          <EmptyState title="No room types" description="No room types for this hotel." />
+        )}
+
+        {error && <ErrorAlert message={error} />}
+        {busy && <PanelSkeleton rows={2} />}
+
+        {!busy && (
+          <>
+            <div
+              className="grid grid-cols-7 gap-1.5 sm:gap-2"
+              aria-label={`Calendar for ${range.label}`}
+            >
+              {WEEKDAYS.map((name) => (
+                <div
+                  key={name}
+                  className="pb-1 text-center text-xs font-bold uppercase tracking-wide text-muted-foreground"
+                >
+                  {name}
+                </div>
+              ))}
+              {gridCells.map((cell, index) => {
+                if (!cell) {
+                  return <div key={`pad-${index}`} className="min-h-[3.5rem]" />;
+                }
+                const key = dayKey(cell);
+                const day = dayMap.get(key);
+                const bookable = day?.bookable ?? false;
+                const remaining = day?.remaining_units;
+
+                return (
+                  <div
+                    key={key}
+                    className={cn(
+                      "flex min-h-[3.5rem] flex-col gap-0.5 rounded-lg border p-1.5 text-xs transition-colors sm:p-2",
+                      bookable
+                        ? "border-success/40 bg-success/10"
+                        : "border-border bg-card/40 opacity-80"
+                    )}
+                    title={
+                      day
+                        ? `${key}: ${remaining ?? "?"} remaining`
+                        : key
+                    }
+                  >
+                    <span className="font-bold">{cell.getDate()}</span>
+                    {day && (
+                      <span className="text-muted-foreground">
+                        {remaining ?? "—"} left
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="success">Bookable</Badge>
+              <Badge variant="secondary">Sold out / blocked</Badge>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }

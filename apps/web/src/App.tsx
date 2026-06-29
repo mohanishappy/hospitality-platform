@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import { BookingPanel } from "./components/BookingPanel";
-import { BrandHeader } from "./components/BrandHeader";
 import { CalendarPanel } from "./components/CalendarPanel";
 import { EnterpriseAdminPage } from "./components/EnterpriseAdminPage";
 import { EnterprisePage } from "./components/EnterprisePage";
@@ -10,7 +9,9 @@ import { HomePage } from "./components/HomePage";
 import { InviteAcceptPage } from "./components/InviteAcceptPage";
 import { PanelErrorBoundary } from "./components/ErrorBoundary";
 import { ReservationsPanel } from "./components/ReservationsPanel";
-import { SiteFooter } from "./components/SiteFooter";
+import { HeroBand } from "./components/layout/PageHeader";
+import { GuestShell } from "./components/layout/GuestShell";
+import { ErrorAlert } from "./components/shared/ErrorAlert";
 import {
   AccessClaimsProvider,
   useAccessClaims,
@@ -24,7 +25,6 @@ import {
   parseInviteTokenFromSearch,
 } from "./lib/tenantPath";
 import type { AppConfig } from "./config";
-import "./App.css";
 
 type Props = {
   config: AppConfig;
@@ -60,56 +60,48 @@ function ChainSite({ config, chainCode }: { config: AppConfig; chainCode: string
     ready && isAuthenticated && can("inventory:read") && !isGuestOnly;
 
   return (
-    <div className="app">
-      <BrandHeader
-        brandName={brandName}
+    <GuestShell
+      brandName={brandName}
+      brandHref="/"
+      audience={config.auth0Audience}
+      chainCode={chainCode}
+      gatewayUrl={config.gatewayUrl}
+      wide
+      hero={
+        <HeroBand
+          title="Find your stay"
+          description={`Search availability and book directly with ${brandName}.`}
+        />
+      }
+    >
+      <BookingPanel
+        gatewayUrl={config.gatewayUrl}
         audience={config.auth0Audience}
         chainCode={chainCode}
       />
 
-      <main className="site-main">
-        <section className="brand-hero">
-          <h1>Find your stay</h1>
-          <p className="lede">
-            Search availability and book directly with {brandName}.
-          </p>
-        </section>
+      {accessWarning && <ErrorAlert message={accessWarning} />}
 
-        <BookingPanel
+      {showReservations && (
+        <ReservationsPanel
           gatewayUrl={config.gatewayUrl}
           audience={config.auth0Audience}
+          guestMode={isGuestOnly}
           chainCode={chainCode}
+          defaultChainFilter={defaultChainId ?? "all"}
         />
+      )}
 
-        {accessWarning && (
-          <section className="panel panel-wide">
-            <p className="error">{accessWarning}</p>
-          </section>
-        )}
-
-        {showReservations && (
-          <ReservationsPanel
+      {showCalendar && (
+        <PanelErrorBoundary title="Availability">
+          <CalendarPanel
             gatewayUrl={config.gatewayUrl}
             audience={config.auth0Audience}
-            guestMode={isGuestOnly}
             chainCode={chainCode}
-            defaultChainFilter={defaultChainId ?? "all"}
           />
-        )}
-
-        {showCalendar && (
-          <PanelErrorBoundary title="Availability">
-            <CalendarPanel
-              gatewayUrl={config.gatewayUrl}
-              audience={config.auth0Audience}
-              chainCode={chainCode}
-            />
-          </PanelErrorBoundary>
-        )}
-      </main>
-
-      <SiteFooter gatewayUrl={config.gatewayUrl} />
-    </div>
+        </PanelErrorBoundary>
+      )}
+    </GuestShell>
   );
 }
 

@@ -1,8 +1,14 @@
 import { useAuth0 } from "@auth0/auth0-react";
 import { useEffect, useState } from "react";
+import { CheckCircle2, Mail } from "lucide-react";
 import { acceptStaffInvite, GatewayError } from "../api/gateway";
+import { GuestShell } from "./layout/GuestShell";
+import { PageHeader } from "./layout/PageHeader";
+import { ErrorAlert } from "./shared/ErrorAlert";
+import { SuccessAlert } from "./shared/ErrorAlert";
 import { AuthBar } from "./AuthBar";
-import { SiteFooter } from "./SiteFooter";
+import { Card, CardContent } from "./ui/card";
+import { Badge } from "./ui/badge";
 import type { AppConfig } from "../config";
 
 type Props = {
@@ -23,7 +29,7 @@ export function InviteAcceptPage({ config, token }: Props) {
 
     let cancelled = false;
     setPhase("accepting");
-    (async () => {
+    void (async () => {
       try {
         const accessToken = await getAccessTokenSilently({
           authorizationParams: { audience: config.auth0Audience },
@@ -65,43 +71,55 @@ export function InviteAcceptPage({ config, token }: Props) {
   ]);
 
   return (
-    <div className="app">
-      <header className="site-header">
-        <div className="site-header-inner">
-          <span className="brand-mark">Hospitality</span>
-          <AuthBar audience={config.auth0Audience} />
-        </div>
-      </header>
+    <GuestShell
+      brandName="Hospitality"
+      audience={config.auth0Audience}
+      gatewayUrl={config.gatewayUrl}
+    >
+      <Card className="mx-auto max-w-lg">
+        <CardContent className="space-y-6 p-8">
+          <PageHeader title="Accept staff invite" />
 
-      <main className="site-main">
-        <section className="panel panel-wide">
-          <h1>Accept staff invite</h1>
+          <ol className="flex gap-2 text-xs">
+            <Badge variant={isAuthenticated ? "success" : "default"}>1. Sign in</Badge>
+            <Badge variant={phase === "done" ? "success" : phase === "accepting" ? "default" : "secondary"}>
+              2. Accept
+            </Badge>
+            <Badge variant="secondary">3. Re-login</Badge>
+          </ol>
+
           {!token.trim() && (
-            <p className="error">Missing invite token in the link.</p>
+            <ErrorAlert message="Missing invite token in the link." />
           )}
 
-          {token.trim() && isLoading && <p className="muted">Loading…</p>}
+          {token.trim() && isLoading && (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          )}
 
           {token.trim() && !isLoading && !isAuthenticated && (
             <>
-              <p className="lede">
-                Sign in with the email address that received the invite, then
-                we will link your account.
+              <p className="text-muted-foreground">
+                Sign in with the email address that received the invite, then we
+                will link your account.
               </p>
               <AuthBar audience={config.auth0Audience} />
             </>
           )}
 
           {token.trim() && isAuthenticated && phase === "accepting" && (
-            <p className="muted">Accepting invite…</p>
+            <p className="text-sm text-muted-foreground">Accepting invite…</p>
           )}
 
           {phase === "done" && (
             <>
-              <p className="success">{message}</p>
-              <p className="lede">
-                Sign out and sign in again so your access token includes your
-                new enterprise role.
+              <div className="flex flex-col items-center gap-3 py-4 text-center">
+                <CheckCircle2 className="h-12 w-12 text-success" />
+                <SuccessAlert message={message ?? "Invite accepted."} />
+              </div>
+              <p className="text-sm text-muted-foreground">
+                <Mail className="mr-1 inline h-4 w-4" />
+                Sign out and sign in again so your access token includes your new
+                enterprise role.
               </p>
               <AuthBar audience={config.auth0Audience} />
             </>
@@ -109,18 +127,16 @@ export function InviteAcceptPage({ config, token }: Props) {
 
           {phase === "error" && (
             <>
-              <p className="error">{message}</p>
-              <p className="lede">
-                Confirm you signed in with the invited email, or ask your
-                manager for a new link.
+              <ErrorAlert message={message ?? "Could not accept invite"} />
+              <p className="text-sm text-muted-foreground">
+                Confirm you signed in with the invited email, or ask your manager
+                for a new link.
               </p>
               <AuthBar audience={config.auth0Audience} />
             </>
           )}
-        </section>
-      </main>
-
-      <SiteFooter gatewayUrl={config.gatewayUrl} />
-    </div>
+        </CardContent>
+      </Card>
+    </GuestShell>
   );
 }

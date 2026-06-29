@@ -5,6 +5,7 @@ import {
   type HealthResponse,
   type ReadinessResponse,
 } from "../api/gateway";
+import { Badge } from "@/components/ui/badge";
 
 type Props = {
   gatewayUrl: string;
@@ -49,55 +50,61 @@ export function HealthPanel({ gatewayUrl, compact = false }: Props) {
 
   if (compact) {
     if (state.kind === "loading") {
-      return <p className="footer-status muted">Checking service status…</p>;
+      return (
+        <p className="text-center text-xs text-muted-foreground">
+          Checking service status…
+        </p>
+      );
     }
     if (state.kind === "error") {
       return (
-        <p className="footer-status bad">Booking service unavailable</p>
+        <div className="flex justify-center">
+          <Badge variant="destructive">Booking service unavailable</Badge>
+        </div>
       );
     }
     const ok = state.health.ok && state.ready.ok;
     return (
-      <p className={`footer-status ${ok ? "ok" : "bad"}`}>
-        {ok ? "All systems operational" : "Some services are unavailable"}
-      </p>
+      <div className="flex justify-center">
+        <Badge variant={ok ? "success" : "destructive"}>
+          {ok ? "All systems operational" : "Some services unavailable"}
+        </Badge>
+      </div>
     );
   }
 
   return (
-    <section className="panel">
-      <h2>Gateway health</h2>
-      <p className="muted endpoint">{gatewayUrl}</p>
-
-      {state.kind === "loading" && <p>Loading…</p>}
-
-      {state.kind === "error" && (
-        <p className="error">Could not reach gateway: {state.message}</p>
+    <div className="glass-panel p-6">
+      <h2 className="font-display text-xl font-semibold">Gateway health</h2>
+      <p className="mt-1 break-all text-xs text-muted-foreground">{gatewayUrl}</p>
+      {state.kind === "loading" && (
+        <p className="mt-4 text-sm text-muted-foreground">Loading…</p>
       )}
-
+      {state.kind === "error" && (
+        <p className="mt-4 text-sm text-destructive">
+          Could not reach gateway: {state.message}
+        </p>
+      )}
       {state.kind === "ok" && (
-        <dl className="kv">
-          <div>
-            <dt>/health</dt>
-            <dd className={state.health.ok ? "ok" : "bad"}>
-              {state.health.ok ? "ok" : "degraded"}
+        <dl className="mt-4 space-y-2 text-sm">
+          <div className="flex justify-between gap-4 border-t border-border pt-2">
+            <dt className="font-medium">/health</dt>
+            <dd>
+              <Badge variant={state.health.ok ? "success" : "destructive"}>
+                {state.health.ok ? "ok" : "degraded"}
+              </Badge>
             </dd>
           </div>
-          <div>
-            <dt>/health/ready</dt>
-            <dd className={state.ready.ok ? "ok" : "bad"}>
-              {state.ready.ok ? "ready" : "not ready"}
+          <div className="flex justify-between gap-4 border-t border-border pt-2">
+            <dt className="font-medium">/health/ready</dt>
+            <dd>
+              <Badge variant={state.ready.ok ? "success" : "destructive"}>
+                {state.ready.ok ? "ready" : "not ready"}
+              </Badge>
             </dd>
           </div>
-          {state.ready.checks &&
-            Object.entries(state.ready.checks).map(([key, value]) => (
-              <div key={key}>
-                <dt>{key}</dt>
-                <dd className={value ? "ok" : "bad"}>{value ? "pass" : "fail"}</dd>
-              </div>
-            ))}
         </dl>
       )}
-    </section>
+    </div>
   );
 }

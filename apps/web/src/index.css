@@ -1,64 +1,266 @@
-:root {
-  color-scheme: light dark;
-  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-  color: #1a1f2e;
-  background: #f4f6fb;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "DM Sans", system-ui, sans-serif;
+  --font-display: "Cormorant Garamond", Georgia, serif;
+
+  --color-background: oklch(0.985 0.008 240);
+  --color-foreground: oklch(0.22 0.03 260);
+  --color-muted: oklch(0.55 0.02 260);
+  --color-muted-foreground: oklch(0.52 0.02 260);
+  --color-card: oklch(1 0 0 / 0.72);
+  --color-card-foreground: oklch(0.22 0.03 260);
+  --color-border: oklch(0.88 0.02 240 / 0.8);
+  --color-input: oklch(0.92 0.015 240);
+  --color-ring: oklch(0.62 0.14 195);
+  --color-primary: oklch(0.52 0.12 195);
+  --color-primary-foreground: oklch(0.99 0 0);
+  --color-secondary: oklch(0.96 0.015 240);
+  --color-secondary-foreground: oklch(0.28 0.03 260);
+  --color-accent: oklch(0.94 0.03 195);
+  --color-accent-foreground: oklch(0.32 0.06 195);
+  --color-destructive: oklch(0.55 0.2 25);
+  --color-destructive-foreground: oklch(0.99 0 0);
+  --color-success: oklch(0.55 0.14 155);
+  --color-success-foreground: oklch(0.99 0 0);
+  --color-warning: oklch(0.72 0.14 75);
+  --color-glass: oklch(1 0 0 / 0.55);
+  --color-glass-border: oklch(1 0 0 / 0.35);
+
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #e8ecf5;
-    background: #0f141f;
+.dark {
+  --color-background: oklch(0.16 0.025 260);
+  --color-foreground: oklch(0.94 0.01 260);
+  --color-muted: oklch(0.62 0.02 260);
+  --color-muted-foreground: oklch(0.68 0.02 260);
+  --color-card: oklch(0.22 0.03 260 / 0.65);
+  --color-card-foreground: oklch(0.94 0.01 260);
+  --color-border: oklch(0.35 0.03 260 / 0.6);
+  --color-input: oklch(0.28 0.03 260);
+  --color-ring: oklch(0.68 0.12 195);
+  --color-primary: oklch(0.72 0.11 195);
+  --color-primary-foreground: oklch(0.15 0.03 260);
+  --color-secondary: oklch(0.28 0.03 260);
+  --color-secondary-foreground: oklch(0.92 0.01 260);
+  --color-accent: oklch(0.3 0.04 195);
+  --color-accent-foreground: oklch(0.88 0.04 195);
+  --color-glass: oklch(0.22 0.03 260 / 0.55);
+  --color-glass-border: oklch(1 0 0 / 0.08);
+}
+
+@layer base {
+  * {
+    @apply border-border box-border;
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased min-h-screen;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -20%, oklch(0.72 0.1 195 / 0.18), transparent),
+      radial-gradient(ellipse 60% 40% at 100% 0%, oklch(0.65 0.08 280 / 0.1), transparent);
+  }
+
+  .dark body {
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -20%, oklch(0.45 0.1 195 / 0.25), transparent),
+      radial-gradient(ellipse 60% 40% at 0% 100%, oklch(0.35 0.08 280 / 0.15), transparent);
+  }
+
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 
-* {
-  box-sizing: border-box;
+@layer utilities {
+  .text-muted {
+    @apply text-muted-foreground;
+  }
+
+  .text-error {
+    @apply text-destructive;
+  }
+
+  .text-success {
+    @apply text-success;
+  }
 }
 
-body {
-  margin: 0;
-  min-height: 100vh;
+@utility glass-panel {
+  border-radius: var(--radius-xl);
+  border-width: 1px;
+  border-color: var(--color-glass-border);
+  background-color: var(--color-glass);
+  backdrop-filter: blur(24px);
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.05);
 }
 
-button {
-  border: none;
-  border-radius: 8px;
-  padding: 0.55rem 1rem;
-  font: inherit;
-  cursor: pointer;
-  background: #2f6fed;
-  color: #fff;
+.dark .glass-panel {
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.2);
 }
 
-button.secondary {
-  background: transparent;
-  border: 1px solid #94a3b8;
-  color: inherit;
-}
+@layer components {
+  .admin-tab {
+    @apply flex flex-col gap-6;
+  }
 
-code {
-  font-family: ui-monospace, Consolas, monospace;
-  font-size: 0.9em;
-}
+  .panel,
+  .panel-wide {
+    @apply glass-panel p-6;
+  }
 
-.muted {
-  color: #64748b;
-}
+  .section-title {
+    @apply font-display text-2xl font-semibold;
+  }
 
-.error {
-  color: #b42318;
-}
+  .subsection-title {
+    @apply font-display text-lg font-semibold;
+  }
 
-.ok {
-  color: #067647;
-}
+  .muted {
+    @apply text-muted-foreground;
+  }
 
-.bad {
-  color: #b42318;
+  .error {
+    @apply text-destructive;
+  }
+
+  .success {
+    @apply text-success;
+  }
+
+  .ok {
+    @apply text-success;
+  }
+
+  .bad {
+    @apply text-destructive;
+  }
+
+  .admin-form {
+    @apply flex max-w-md flex-col gap-3;
+  }
+
+  .admin-form label,
+  .guest-fields label,
+  .booking-search label,
+  .calendar-filters label,
+  .reservations-filters label,
+  .notes-form label,
+  .reservation-actions label {
+    @apply flex flex-col gap-1.5 text-sm font-semibold;
+  }
+
+  .admin-form input,
+  .admin-form select,
+  .admin-form textarea,
+  .guest-fields input,
+  .booking-search input,
+  .calendar-filters select,
+  .reservations-filters select,
+  .notes-form textarea,
+  .reservation-actions select,
+  .invite-url-box input {
+    @apply h-10 w-full rounded-lg border border-border bg-input/50 px-3 text-sm backdrop-blur-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+  }
+
+  .admin-form button,
+  .guest-fields + button,
+  .booking-search button,
+  .reservations-filters button,
+  .notes-form button,
+  .reservation-actions button,
+  .staff-row-actions button,
+  .staff-edit-actions button,
+  .confirmation .actions button,
+  .calendar-nav button,
+  .load-more {
+    @apply inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-all hover:brightness-110 disabled:opacity-50;
+  }
+
+  button.secondary,
+  .admin-form button.secondary,
+  .staff-row-actions button.secondary,
+  .staff-edit-actions button.secondary,
+  .reservation-row,
+  .load-more.secondary {
+    @apply border border-border bg-secondary/80 text-secondary-foreground hover:bg-secondary;
+  }
+
+  .staff-list {
+    @apply flex list-none flex-col gap-3 p-0;
+  }
+
+  .staff-row {
+    @apply rounded-xl border border-border bg-card/50 p-4;
+  }
+
+  .admin-pick-list {
+    @apply flex list-none flex-col gap-2 p-0;
+  }
+
+  .admin-pick-item {
+    @apply rounded-xl border border-border bg-card/50 p-4 text-left transition-colors hover:border-primary/30;
+  }
+
+  .admin-nav-link {
+    @apply rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground no-underline transition-colors hover:bg-accent hover:text-foreground;
+  }
+
+  .admin-nav-link.active {
+    @apply bg-primary/15 text-primary font-semibold;
+  }
+
+  .admin-subnav-btn {
+    @apply rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary;
+  }
+
+  .admin-subnav-btn.active {
+    @apply border-primary/40 bg-primary/15 text-primary;
+  }
+
+  .checkbox-row {
+    @apply flex-row items-center gap-2;
+  }
+
+  .kv > div {
+    @apply flex justify-between gap-4 border-t border-border py-2 text-sm first:border-t-0;
+  }
+
+  .kv dt {
+    @apply font-semibold text-muted-foreground;
+  }
+
+  .kv dd {
+    @apply m-0 text-right;
+  }
 }

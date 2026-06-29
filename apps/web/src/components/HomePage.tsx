@@ -1,3 +1,5 @@
+import { motion } from "framer-motion";
+import { ArrowUpRight, Building2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   fetchEnterpriseChains,
@@ -7,7 +9,12 @@ import {
 } from "../api/gateway";
 import { chainPath, enterprisePath } from "../lib/tenantPath";
 import type { AppConfig } from "../config";
-import { SiteFooter } from "./SiteFooter";
+import { GuestShell } from "./layout/GuestShell";
+import { HeroBand } from "./layout/PageHeader";
+import { CardGridSkeleton } from "./shared/LoadingBlock";
+import { ErrorAlert } from "./shared/ErrorAlert";
+import { EmptyState } from "./shared/EmptyState";
+import { Card, CardContent } from "./ui/card";
 
 type Props = {
   config: AppConfig;
@@ -28,7 +35,7 @@ export function HomePage({ config }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
         const entData = await fetchEnterprises(config.gatewayUrl);
         const enterprises = entData.enterprises ?? [];
@@ -59,61 +66,137 @@ export function HomePage({ config }: Props) {
     };
   }, [config.gatewayUrl]);
 
+  const totalBrands =
+    state.kind === "ok"
+      ? state.groups.reduce((n, g) => n + g.chains.length, 0)
+      : 0;
+
   return (
-    <div className="app">
-      <header className="site-header site-header-home">
-        <div className="site-brand">
-          <span className="site-brand-link">Book a stay</span>
-        </div>
-      </header>
+    <GuestShell
+      brandName="Book a stay"
+      audience={config.auth0Audience}
+      gatewayUrl={config.gatewayUrl}
+      wide
+      hero={
+        <HeroBand
+          title="Where would you like to stay?"
+          description="Browse hotel groups and brands to check availability and reserve your room."
+        />
+      }
+    >
+      {state.kind === "loading" && <CardGridSkeleton count={6} />}
 
-      <main className="site-main">
-        <section className="brand-hero">
-          <h1>Where would you like to stay?</h1>
-          <p className="lede">
-            Browse our hotel groups and brands to check availability and reserve
-            your room.
-          </p>
-        </section>
+      {state.kind === "error" && <ErrorAlert message={state.message} />}
 
-        <section className="panel panel-wide brand-picker">
-          {state.kind === "loading" && <p className="muted">Loading…</p>}
-          {state.kind === "error" && <p className="error">{state.message}</p>}
-          {state.kind === "ok" && state.groups.length === 0 && (
-            <p className="muted">No properties available right now.</p>
+      {state.kind === "ok" && state.groups.length === 0 && (
+        <EmptyState
+          title="No properties available"
+          description="Check back soon — new hotel groups are added regularly."
+        />
+      )}
+
+      {state.kind === "ok" && state.groups.length > 0 && (
+        <div className="space-y-10">
+          {state.groups.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="grid gap-4 lg:grid-cols-3"
+            >
+              <Card className="relative overflow-hidden lg:col-span-2 lg:row-span-2">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-transparent" />
+                <CardContent className="relative flex h-full min-h-[220px] flex-col justify-end p-8">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-primary">
+                    Featured
+                  </p>
+                  <h2 className="mt-2 font-display text-3xl font-semibold">
+                    {state.groups[0]!.enterprise.name}
+                  </h2>
+                  <p className="mt-2 max-w-md text-muted-foreground">
+                    {state.groups[0]!.chains.length} brand
+                    {state.groups[0]!.chains.length === 1 ? "" : "s"} · Direct
+                    booking, no middleman
+                  </p>
+                  <a
+                    href={enterprisePath(state.groups[0]!.enterprise.code)}
+                    className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline"
+                  >
+                    Explore enterprise
+                    <ArrowUpRight className="h-4 w-4" />
+                  </a>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="flex h-full flex-col justify-center p-6">
+                  <p className="text-4xl font-display font-semibold">{totalBrands}</p>
+                  <p className="text-sm text-muted-foreground">Brands to explore</p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="flex h-full flex-col justify-center p-6">
+                  <Building2 className="h-8 w-8 text-primary" />
+                  <p className="mt-2 font-display text-lg font-semibold">
+                    {state.groups.length} enterprise
+                    {state.groups.length === 1 ? "" : "s"}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Hotel groups on the platform
+                  </p>
+                </CardContent>
+              </Card>
+            </motion.div>
           )}
-          {state.kind === "ok" &&
-            state.groups.map((group) => (
-              <div key={group.enterprise.id} className="enterprise-group">
-                <div className="enterprise-group-head">
-                  <h2>
-                    <a href={enterprisePath(group.enterprise.code)}>
+
+          {state.groups.map((group, gi) => (
+            <section key={group.enterprise.id} className="space-y-4">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <h2 className="font-display text-2xl font-semibold">
+                    <a
+                      href={enterprisePath(group.enterprise.code)}
+                      className="hover:text-primary"
+                    >
                       {group.enterprise.name}
                     </a>
                   </h2>
-                  <a
-                    href={enterprisePath(group.enterprise.code)}
-                    className="muted enterprise-hub-link"
-                  >
-                    Enterprise hub →
-                  </a>
                 </div>
-                <ul className="brand-list">
-                  {group.chains.map((chain) => (
-                    <li key={chain.id}>
-                      <a href={chainPath(chain.code)} className="brand-card">
-                        <strong>{chain.name}</strong>
-                        <span className="muted">View availability →</span>
-                      </a>
-                    </li>
-                  ))}
-                </ul>
+                <a
+                  href={enterprisePath(group.enterprise.code)}
+                  className="text-sm text-muted-foreground hover:text-primary"
+                >
+                  Enterprise hub →
+                </a>
               </div>
-            ))}
-        </section>
-      </main>
 
-      <SiteFooter gatewayUrl={config.gatewayUrl} />
-    </div>
+              <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {group.chains.map((chain, ci) => (
+                  <motion.li
+                    key={chain.id}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: gi * 0.05 + ci * 0.03 }}
+                  >
+                    <a
+                      href={chainPath(chain.code)}
+                      className="group flex h-full flex-col rounded-xl border border-border/80 bg-card p-5 transition-all hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5"
+                    >
+                      <strong className="font-display text-lg font-semibold group-hover:text-primary">
+                        {chain.name}
+                      </strong>
+                      <span className="mt-auto pt-4 flex items-center gap-1 text-sm text-muted-foreground">
+                        View availability
+                        <ArrowUpRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                      </span>
+                    </a>
+                  </motion.li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      )}
+    </GuestShell>
   );
 }
